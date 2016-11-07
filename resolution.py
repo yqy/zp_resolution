@@ -5,6 +5,7 @@ import re
 import argparse
 import math
 import timeit
+import numpy
 
 from conf import *
 from buildTree import get_info_from_file
@@ -147,13 +148,13 @@ if args.type == "res":
                     #ifl = get_feature.get_res_feature_Max(zp,candidate,zp_wl,candi_wl,[],[],[])
                     #ifl = get_feature.get_res_feature_Max(zp,candidate,zp_wl,candi_wl,HcPz,PcPz,HcP)
                     ifl = get_feature.get_res_feature_Max(zp,candidate,zp_wl,candi_wl,[],[],HcP)
+                    #ifl = get_feature.get_res_feature_NN(zp,candidate,zp_wl,candi_wl,[],[],HcP)
                     res_result = "0"
                     if (sentence_index,zp_index,candi_sentence_index,candi_begin,candi_end) in anaphorics:
                         res_result = "1"
 
                     ifl = [res_result] + ifl 
                     fl.append(ifl) 
-
         get_feature.print_feature(1,fl)
 
 
@@ -952,7 +953,7 @@ def get_inputs(w2v,nodes_info,sentence_index,begin_index,end_index,ty):
                     post_zp_x.append(list(em_x))
         post_zp_x.append(list([0.0]*args.embedding_dimention))
         post_zp_x = post_zp_x[::-1]
-        return (pre_zp_x,post_zp_x)
+        return (numpy.array(pre_zp_x),numpy.array(post_zp_x))
 
     elif ty == "np":
         tnl,twl = nodes_info[sentence_index]
@@ -976,7 +977,7 @@ def get_inputs(w2v,nodes_info,sentence_index,begin_index,end_index,ty):
                 em_x = w2v.get_vector_by_word_dl(twl[i].word)
                 if em_x is not None:
                     np_x.append(list(em_x))
-        return np_x
+        return numpy.array(np_x)
 
 if args.type == "nn":
 
