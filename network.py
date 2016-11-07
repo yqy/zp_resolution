@@ -114,7 +114,7 @@ class fakeLayer():
 
 
 class NetWork():
-    def __init__(self,n_hidden,embedding_dimention=50):
+    def __init__(self,n_hidden,embedding_dimention=50,hope_num=1):
 
         ##n_in: sequence lstm 的输入维度
         ##n_hidden: lstm for candi and zp 的隐层维度
@@ -144,15 +144,30 @@ class NetWork():
 
         
         ### get attention for ZP and NP ###
-        dot = self.np_out*self.zp_out 
+
+        #new_zp = self.zp_out
+        
+        #nz,_ = theano.scan(self.attention_step,outputs_info=new_zp,non_sequences=[self.np_out],n_steps=hope_num)
+        
+        #dot = self.np_out*nz[-1]
+
+        dot_0 = self.zp_out*self.np_out
+        attention_0 = softmax(T.sum(dot_0,axis=[1]))[0] 
+        zp_0 = T.sum(attention_0[:,None]*self.np_out,axis=0)
+
+
+        dot = zp_0*self.np_out
+
         self.get_dot = theano.function(inputs=[self.zp_x_pre,self.zp_x_post,self.np_x,self.mask],outputs=[T.sum(dot,axis=[1])])
         
-
         attention = softmax(T.sum(dot,axis=[1]))[0] 
-        
-        self.get_attention = theano.function(inputs=[self.zp_x_pre,self.zp_x_post,self.np_x,self.mask],outputs=[attention])
     
         new_zp = T.sum(attention[:,None]*self.np_out,axis=0)
+
+
+        self.get_dot = theano.function(inputs=[self.zp_x_pre,self.zp_x_post,self.np_x,self.mask],outputs=[T.sum(dot,axis=[1])])
+        self.get_attention = theano.function(inputs=[self.zp_x_pre,self.zp_x_post,self.np_x,self.mask],outputs=[attention])
+
 
         self.out = attention
         self.get_out = theano.function(inputs=[self.zp_x_pre,self.zp_x_post,self.np_x,self.mask],outputs=[self.out])
@@ -190,6 +205,19 @@ class NetWork():
     def show_para(self):
         for para in self.params:
             print >> sys.stderr, para,para.get_value() 
+    def attention_step(self,zp_y,np_y):
+        #dot = self.np_out*self.zp_out 
+        dot = zp_y*np_y
+        #self.get_dot = theano.function(inputs=[self.zp_x_pre,self.zp_x_post,self.np_x,self.mask],outputs=[T.sum(dot,axis=[1])])
+        
+        attention = softmax(T.sum(dot,axis=[1]))[0] 
+        
+        #self.get_attention = theano.function(inputs=[self.zp_x_pre,self.zp_x_post,self.np_x,self.mask],outputs=[attention])
+    
+        new_zp = T.sum(attention[:,None]*np_y,axis=0)
+
+        return new_zp
+
 
 
 class LSTM_need():

@@ -1183,7 +1183,7 @@ if args.type == "nn":
     
     ## Build DL Model ## 
     print >> sys.stderr,"Building Model ..."
-    LSTM = network.NetWork(args.embedding_dimention,100)
+    LSTM = network.NetWork(args.embedding_dimention,100,2)
     #save_f = file('lstm_init_model', 'wb') 
     #cPickle.dump(LSTM, save_f, protocol=cPickle.HIGHEST_PROTOCOL)
     #save_f.close()
@@ -1226,13 +1226,8 @@ if args.type == "nn":
         predict_result = []
         numOfZP = 0
         hits = 0
-        for (zp_x_pre,zp_x_post,np_x_list,mask,res_list,zp_candi_list,this_nodes_info) in test_instances:
+        for (zp_x_pre,zp_x_post,np_x_list,mask,res_list,zp_candi_list,nodes_info) in test_instances:
 
-            outputs = list(LSTM.get_out(zp_x_pre,zp_x_post,np_x_list,mask)[0])
-            max_index = find_max(outputs)
-            if res_list[max_index] == 1:
-                hits += 1
-            continue
 
             numOfZP += 1
             if len(np_x_list) == 0: ## no suitable candidates
@@ -1241,18 +1236,27 @@ if args.type == "nn":
                 zp,candidate = zp_candi_list[-1]
                 sentence_index,zp_index = zp
                 print >> sys.stderr,"------" 
-                this_sentence = get_sentence(sentence_index,zp_index,this_nodes_info)
+                this_sentence = get_sentence(sentence_index,zp_index,nodes_info)
                 print >> sys.stderr, "Sentence:",this_sentence
 
                 print >> sys.stderr, "Candidates:"
 
+                outputs = list(LSTM.get_out(zp_x_pre,zp_x_post,np_x_list,mask)[0])
+                max_index = find_max(outputs)
+                if res_list[max_index] == 1:
+                    hits += 1
+
+                print outputs
+                
                 st_score = 0.0
                 predict_items = None
                 numOfCandi = 0
                 predict_str_log = None
-                last = ""
-                for zp_x_pre,zp_x_post,np_x,res_result,zp,candidate,nodes_info in test_instance:
-                    nn_predict = LSTM.get_out(np_x,zp_x_pre,zp_x_post)[0][1]
+                for i in range(len(zp_candi_list)): 
+                    zp,candidate = zp_candi_list[i]
+                    nn_predict = outputs[i]
+                    res_result = res_list[i]
+                
                     candi_sentence_index,candi_begin,candi_end = candidate
                     candi_str = "\t".join(get_candi_info(candi_sentence_index,nodes_info,candi_begin,candi_end,res_result))
                     if nn_predict >= st_score: 
@@ -1260,13 +1264,7 @@ if args.type == "nn":
                         st_score = nn_predict
                         predict_str_log = "%d\t%s\tPredict:%f"%(numOfCandi,candi_str,nn_predict)
                     print >> sys.stderr,"%d\t%s\tPredict:%f"%(numOfCandi,candi_str,nn_predict)
-                    last = "%d\t%s\tPredict:%f"%(numOfCandi,candi_str,nn_predict)
                     numOfCandi += 1
-
-                if predict_items is None:
-                    zp_x_pre,zp_x_post,np_x,res_result,zp,candidate,nodes_info = test_instance[-1]
-                    predict_items = (zp,candidate)
-                    predict_str_log = last
 
                 predict_zp,predict_candidate = predict_items
                 sentence_index,zp_index = predict_zp 
@@ -1280,6 +1278,6 @@ if args.type == "nn":
         print >> sys.stderr, "Test Hits:",hits,"/",len(test_instances)
         print "Echo",echo 
         print "Test Hits:",hits,"/",len(test_instances)
-        #get_prf(anaphorics_result,predict_result)
-        #sys.stdout.flush()
+        get_prf(anaphorics_result,predict_result)
+        sys.stdout.flush()
 
