@@ -14,6 +14,10 @@ import get_feature
 import word2vec
 import network
 
+
+import cPickle
+sys.setrecursionlimit(1000000)
+
 if(len(sys.argv) <= 1): 
     sys.stderr.write("Not specify options, type '-h' for help\n")
     exit()
@@ -953,31 +957,62 @@ def get_inputs(w2v,nodes_info,sentence_index,begin_index,end_index,ty):
                     post_zp_x.append(list(em_x))
         post_zp_x.append(list([0.0]*args.embedding_dimention))
         post_zp_x = post_zp_x[::-1]
-        return (numpy.array(pre_zp_x),numpy.array(post_zp_x))
+        return (numpy.array(pre_zp_x,dtype = numpy.float32),numpy.array(post_zp_x,dtype = numpy.float32))
 
     elif ty == "np":
         tnl,twl = nodes_info[sentence_index]
         np_x = []
-        np_x.append(list([0.0]*args.embedding_dimention))
+        #np_x.append(list([0.0]*args.embedding_dimention))
 
+        '''
         for i in range(begin_index-1,begin_index):
             if i >= 0 and i < len(twl):
                 em_x = w2v.get_vector_by_word_dl(twl[i].word)
                 if em_x is not None:
                     np_x.append(list(em_x))
+        '''
 
         for i in range(begin_index,end_index+1):
             if i >= 0 and i < len(twl):
                 em_x = w2v.get_vector_by_word_dl(twl[i].word)
                 if em_x is not None:
                     np_x.append(list(em_x))
-
+        '''
         for i in range(end_index+1,end_index+2):
             if i >= 0 and i < len(twl):
                 em_x = w2v.get_vector_by_word_dl(twl[i].word)
                 if em_x is not None:
                     np_x.append(list(em_x))
-        return numpy.array(np_x)
+        '''
+        return np_x
+
+
+def add_mask(np_x_list):
+    add_item = list([0.0]*args.embedding_dimention)
+    masks = []
+
+    max_len = 0
+    for np_x in np_x_list:
+        if len(np_x) > max_len:
+            max_len = len(np_x)
+
+    for np_x in np_x_list:
+        mask = len(np_x)*[1]
+        for i in range(max_len-len(np_x)):
+            np_x.append(add_item)
+            mask.append(0)
+        masks.append(mask)
+    return masks
+
+def find_max(l):
+    ### 找到list中最大的 返回index
+    return_index = len(l)-1
+    max_num = 0.0
+    for i in range(len(l)):
+        if l[i] >= max_num:
+            max_num = l[i] 
+            return_index = i
+    return return_index
 
 if args.type == "nn":
 
@@ -1021,9 +1056,14 @@ if args.type == "nn":
             this_sentence = get_sentence(sentence_index,zp_index,nodes_info)
             print >> sys.stderr, "Sentence:",this_sentence
 
-            fl = []
+            
+            zp = (sentence_index,zp_index)
+            zp_x_pre,zp_x_post = get_inputs(w2v,nodes_info,sentence_index,zp_index,zp_index,"zp")
+
             zp_nl,zp_wl = nodes_info[sentence_index]
             candi_number = 0
+            res_list = []
+            np_x_list = []
 
             for ci in range(max(0,sentence_index-MAX),sentence_index+1):
                 
@@ -1033,21 +1073,27 @@ if args.type == "nn":
                 for (candi_begin,candi_end) in candi[candi_sentence_index]:
                     if ci == sentence_index and candi_end > zp_index:
                         continue
-                    zp = (sentence_index,zp_index)
                     candidate = (candi_sentence_index,candi_begin,candi_end)
 
-                    zp_x_pre,zp_x_post = get_inputs(w2v,nodes_info,sentence_index,zp_index,zp_index,"zp")
                     np_x = get_inputs(w2v,nodes_info,candi_sentence_index,candi_begin,candi_end,"np")
 
                     res_result = 0
                     if (sentence_index,zp_index,candi_sentence_index,candi_begin,candi_end) in anaphorics:
                         res_result = 1
 
-                    training_instances.append((zp_x_pre,zp_x_post,np_x,res_result))
-    #for zp_x_pre,zp_x_post,np_x,res_result in training_instances:
-    #    print zp_x_pre,zp_x_post,np_x,res_result
-
-
+                    if len(np_x) == 0:
+                        continue
+                    
+                    np_x_list.append(np_x)
+                    res_list.append(res_result)
+            if len(np_x_list) == 0:
+                continue
+            if sum(res_list) == 0:
+                continue
+            mask = add_mask(np_x_list) 
+            np_x_list = numpy.array(np_x_list,dtype = numpy.float32)
+            mask = numpy.array(mask,dtype = numpy.float32)
+            training_instances.append((zp_x_pre,zp_x_post,np_x_list,mask,res_list))
 
     ####  Test process  ####
 
@@ -1077,16 +1123,22 @@ if args.type == "nn":
             if not (sentence_index,zp_index) in ana_zps:
                 continue
 
-            this_zp_test_instence = []            
             done_zp_num += 1
    
             print >> sys.stderr,"------" 
             this_sentence = get_sentence(sentence_index,zp_index,nodes_info)
             print >> sys.stderr, "Sentence:",this_sentence
 
-            fl = []
+
+            zp = (sentence_index,zp_index)
+            zp_x_pre,zp_x_post = get_inputs(w2v,nodes_info,sentence_index,zp_index,zp_index,"zp")
+
             zp_nl,zp_wl = nodes_info[sentence_index]
             candi_number = 0
+            this_nodes_info = {} ## 为了节省存储空间
+            np_x_list = []
+            res_list = []
+            zp_candi_list = [] ## 为了存zp和candidate
 
             for ci in range(max(0,sentence_index-MAX),sentence_index+1):
                 
@@ -1096,29 +1148,34 @@ if args.type == "nn":
                 for (candi_begin,candi_end) in candi[candi_sentence_index]:
                     if ci == sentence_index and candi_end > zp_index:
                         continue
-                    zp = (sentence_index,zp_index)
                     candidate = (candi_sentence_index,candi_begin,candi_end)
 
-                    zp_x_pre,zp_x_post = get_inputs(w2v,nodes_info,sentence_index,zp_index,zp_index,"zp")
                     np_x = get_inputs(w2v,nodes_info,candi_sentence_index,candi_begin,candi_end,"np")
 
                     res_result = 0
                     if (sentence_index,zp_index,candi_sentence_index,candi_begin,candi_end) in anaphorics:
                         res_result = 1
 
-                    this_nodes_info = {} ## 为了节省存储空间
+                    if len(np_x) == 0:
+                        continue
+                    
+                    np_x_list.append(np_x)
+                    res_list.append(res_result)
+                    zp_candi_list.append((zp,candidate))
+
                     this_nodes_info[candi_sentence_index] = nodes_info[candi_sentence_index]
                     this_nodes_info[sentence_index] = nodes_info[sentence_index]
 
-                    #this_zp_test_instence.append((zp_x_pre,zp_x_post,np_x,res_result,zp,candidate,nodes_info))
-                    this_zp_test_instence.append((zp_x_pre,zp_x_post,np_x,res_result,zp,candidate,this_nodes_info))
+                    #this_zp_test_instence.append((zp_x_pre,zp_x_post,np_x,res_result,zp,candidate,this_nodes_info))
+            if len(np_x_list) == 0:
+                continue
+
+            mask = add_mask(np_x_list) 
+            np_x_list = numpy.array(np_x_list,dtype = numpy.float32)
+            mask = numpy.array(mask,dtype = numpy.float32)
             
             anaphorics_result.append(anaphorics)
-            test_instances.append(this_zp_test_instence)
-    #for test_instance in test_instances:
-    #    for zp_x_pre,zp_x_post,np_x,res_result,zp,candidate in test_instance:
-    #        print zp_x_pre,zp_x_post,np_x,res_result
-
+            test_instances.append((zp_x_pre,zp_x_post,np_x_list,mask,res_list,zp_candi_list,this_nodes_info))
 
     w2v = None # 释放空间
 
@@ -1126,48 +1183,65 @@ if args.type == "nn":
     
     ## Build DL Model ## 
     print >> sys.stderr,"Building Model ..."
-    LSTM = network.NetWork(args.embedding_dimention,100,[200,2])
-    
-    ### 均衡正负例 ###
-    pos_num = 0
-    neg_num = 0
-    training = []   # 存储正负例均衡后的数据
-    for zp_x_pre,zp_x_post,np_x,res_result in training_instances:
-        if res_result == 1: #正例 
-            pos_num += 1
-            training.append((zp_x_pre,zp_x_post,np_x,res_result)) 
-        else:
-            if neg_num <= pos_num:
-                training.append((zp_x_pre,zp_x_post,np_x,res_result)) 
-                neg_num += 1
-    training_instances = [] # 释放空间
+    LSTM = network.NetWork(args.embedding_dimention,100)
+    #save_f = file('lstm_init_model', 'wb') 
+    #cPickle.dump(LSTM, save_f, protocol=cPickle.HIGHEST_PROTOCOL)
+    #save_f.close()
+
+    #best_f = file('lstm_init_model', 'rb')
+    #LSTM = cPickle.load(best_f)
+
     
     for echo in range(args.echos): 
         print >> sys.stderr, "Echo for time",echo
         start_time = timeit.default_timer()
-        for zp_x_pre,zp_x_post,np_x,res_result in training:
-            LSTM.train_step(np_x,zp_x_pre,zp_x_post,res_result,args.lr)
+        cost = 0.0
+        for zp_x_pre,zp_x_post,np_x,mask,res_list in training_instances:
+            #print np_x,mask,res_list
+
+            cost += LSTM.train_step(zp_x_pre,zp_x_post,np_x,mask,res_list,args.lr)[0]
+
+            #LSTM.show_para()
+            #print LSTM.get_dot(zp_x_pre,zp_x_post,np_x,mask)
+
+
         end_time = timeit.default_timer()
+        print >> sys.stderr,"Cost",cost
         print >> sys.stderr,"Parameters"
         LSTM.show_para()
         print >> sys.stderr, end_time - start_time, "seconds!"
-    
+
+        ### see how many hts ###
+        hits = 0
+        for zp_x_pre,zp_x_post,np_x,mask,res_list in training_instances:
+            outputs = list(LSTM.get_out(zp_x_pre,zp_x_post,np_x,mask)[0])
+            max_index = find_max(outputs)
+            if res_list[max_index] == 1:
+                hits += 1 
+        print >> sys.stderr, "Training Hits:",hits,"/",len(training_instances)
         #### Test for each echo ####
         
         #predict_result.append((sentence_index,zp_index,predict_candi_sentence_index,predict_candi_begin,predict_candi_end))
         print >> sys.stderr, "Begin test" 
         predict_result = []
         numOfZP = 0
-        for test_instance in test_instances:
+        hits = 0
+        for (zp_x_pre,zp_x_post,np_x_list,mask,res_list,zp_candi_list,this_nodes_info) in test_instances:
+
+            outputs = list(LSTM.get_out(zp_x_pre,zp_x_post,np_x_list,mask)[0])
+            max_index = find_max(outputs)
+            if res_list[max_index] == 1:
+                hits += 1
+            continue
+
             numOfZP += 1
-            if len(test_instance) == 0: ## no suitable candidates
+            if len(np_x_list) == 0: ## no suitable candidates
                 predict_result.append((-1,-1,-1,-1,-1))
             else:
-                
-                zp_x_pre,zp_x_post,np_x,res_result,zp,candidate,nodes_info = test_instance[-1]
+                zp,candidate = zp_candi_list[-1]
                 sentence_index,zp_index = zp
                 print >> sys.stderr,"------" 
-                this_sentence = get_sentence(sentence_index,zp_index,nodes_info)
+                this_sentence = get_sentence(sentence_index,zp_index,this_nodes_info)
                 print >> sys.stderr, "Sentence:",this_sentence
 
                 print >> sys.stderr, "Candidates:"
@@ -1202,7 +1276,10 @@ if args.type == "nn":
                 print >> sys.stderr, "Results:"
                 print >> sys.stderr, "Predict -- %s"%predict_str_log
                 print >> sys.stderr, "Done ZP #%d/%d"%(numOfZP,len(test_instances))
+
+        print >> sys.stderr, "Test Hits:",hits,"/",len(test_instances)
         print "Echo",echo 
-        get_prf(anaphorics_result,predict_result)
-        sys.stdout.flush()
+        print "Test Hits:",hits,"/",len(test_instances)
+        #get_prf(anaphorics_result,predict_result)
+        #sys.stdout.flush()
 

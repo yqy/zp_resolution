@@ -11,6 +11,8 @@ from theano.tensor.nnet import softmax
 from theano.tensor import shared_randomstreams
 from theano.tensor.signal import downsample
 
+from theano.compile.nanguardmode import NanGuardMode
+
 
 import lasagne
 
@@ -40,6 +42,7 @@ if GPU:
     theano.config.floatX = 'float32'
 else:
     print >> sys.stderr,"Running with a CPU. If this is not desired,then modify the \n NetWork.py to set\nthe GPU flag to True."
+    theano.config.floatX = 'float64'
 
 def init_weight(n_in,n_out,activation_fn=sigmoid,pre="",uni=False,ones=False):
     rng = np.random.RandomState(1234)
@@ -142,6 +145,9 @@ class NetWork():
         
         ### get attention for ZP and NP ###
         dot = self.np_out*self.zp_out 
+        self.get_dot = theano.function(inputs=[self.zp_x_pre,self.zp_x_post,self.np_x,self.mask],outputs=[T.sum(dot,axis=[1])])
+        
+
         attention = softmax(T.sum(dot,axis=[1]))[0] 
         
         self.get_attention = theano.function(inputs=[self.zp_x_pre,self.zp_x_post,self.np_x,self.mask],outputs=[attention])
@@ -149,6 +155,7 @@ class NetWork():
         new_zp = T.sum(attention[:,None]*self.np_out,axis=0)
 
         self.out = attention
+        self.get_out = theano.function(inputs=[self.zp_x_pre,self.zp_x_post,self.np_x,self.mask],outputs=[self.out])
 
         
         l1_norm_squared = sum([(w**2).sum() for w in self.params])
@@ -159,7 +166,9 @@ class NetWork():
         lmbda_l2 = 0.0
 
         t = T.bvector()
+        #cost = -(T.log((self.out*t).sum()))
         cost = -(T.log((self.out*t).sum()))
+        #cost = 1-((self.out*t).sum())
 
         self.get_cost = theano.function(inputs=[self.zp_x_pre,self.zp_x_post,self.np_x,self.mask,t],outputs=[cost])
 
@@ -174,9 +183,9 @@ class NetWork():
         
         self.train_step = theano.function(inputs=[self.zp_x_pre,self.zp_x_post,self.np_x,self.mask,t,lr], outputs=[cost],
             on_unused_input='warn',
-            updates=updates,
-            allow_input_downcast=True
-            ) 
+            updates=updates)
+            #mode=NanGuardMode(nan_is_error=True, inf_is_error=True, big_is_error=True)
+            #) 
 
     def show_para(self):
         for para in self.params:
@@ -254,7 +263,7 @@ class LSTM():
         #else:
         #    self.x = T.matrix("x")
 
-        wf_x,bf = init_weight(n_in,n_hidden,pre="%s_lstm_f_x_"%prefix,ones=True) 
+        wf_x,bf = init_weight(n_in,n_hidden,pre="%s_lstm_f_x_"%prefix) 
         self.params += [wf_x,bf]
 
         wi_x,bi = init_weight(n_in,n_hidden,pre="%s_lstm_i_x_"%prefix) 
@@ -324,7 +333,7 @@ class LSTM_batch():
         nx = T.transpose(self.x,axes=(1,0,2))
 
 
-        wf_x,bf = init_weight(n_in,n_hidden,pre="%s_lstm_f_x_"%prefix,ones=True) 
+        wf_x,bf = init_weight(n_in,n_hidden,pre="%s_lstm_f_x_"%prefix) 
         self.params += [wf_x,bf]
 
         wi_x,bi = init_weight(n_in,n_hidden,pre="%s_lstm_i_x_"%prefix) 
@@ -349,6 +358,8 @@ class LSTM_batch():
         wo_h,b_h = init_weight(n_hidden,n_hidden,pre="%s_lstm_o_h_"%prefix)
         self.params += [wo_h]     
 
+        #h_t_0 = T.alloc(np.array(0.,dtype=np.float64), x.shape[0], n_hidden)
+        #c_t_0 = T.alloc(np.array(0.,dtype=np.float64), x.shape[0], n_hidden)
         h_t_0 = T.alloc(0., x.shape[0], n_hidden)
         c_t_0 = T.alloc(0., x.shape[0], n_hidden)
 
