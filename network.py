@@ -139,6 +139,7 @@ class NetWork():
         self.mask = T.matrix("mask")
     
         self.np_nn = LSTM_batch(embedding_dimention,n_hidden*2,self.np_x,self.mask)
+        self.params += self.np_nn.params
         #self.np_out = self.np_nn.nn_out
         self.np_out = (self.np_nn.all_hidden).mean(axis=1)
         self.get_np_out = theano.function(inputs=[self.np_x,self.mask],outputs=[self.np_out])
