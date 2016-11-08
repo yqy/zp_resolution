@@ -22,6 +22,7 @@ if(len(sys.argv) <= 1):
     sys.stderr.write("Not specify options, type '-h' for help\n")
     exit()
 
+print >> sys.stderr, os.getpid()
 
 if args.type == "azp":
     path = args.data
