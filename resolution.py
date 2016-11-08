@@ -965,13 +965,11 @@ def get_inputs(w2v,nodes_info,sentence_index,begin_index,end_index,ty):
         np_x = []
         #np_x.append(list([0.0]*args.embedding_dimention))
 
-        '''
         for i in range(begin_index-1,begin_index):
             if i >= 0 and i < len(twl):
                 em_x = w2v.get_vector_by_word_dl(twl[i].word)
                 if em_x is not None:
                     np_x.append(list(em_x))
-        '''
 
         for i in range(begin_index,end_index+1):
             if i >= 0 and i < len(twl):
@@ -1018,6 +1016,7 @@ def find_max(l):
 if args.type == "nn":
 
     if os.path.isfile("./model/save_data"):
+        print >> sys.stderr,"Read from file ./model/save_data"
         read_f = file('./model/save_data', 'rb')        
         training_instances = cPickle.load(read_f)
         anaphorics_result = cPickle.load(read_f)
@@ -1184,6 +1183,7 @@ if args.type == "nn":
                 test_instances.append((zp_x_pre,zp_x_post,np_x_list,mask,res_list,zp_candi_list,this_nodes_info))
 
         w2v = None # 释放空间
+        print >> sys.stderr,"Save file ./model/save_data"
 
         save_f = file('./model/save_data', 'wb')
         cPickle.dump(training_instances, save_f, protocol=cPickle.HIGHEST_PROTOCOL)
