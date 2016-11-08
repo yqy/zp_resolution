@@ -1016,181 +1016,194 @@ def find_max(l):
 
 if args.type == "nn":
 
-    print >> sys.stderr, "Read W2V"
-    w2v = word2vec.Word2Vec(args.embedding)
-
-
-    path = args.data
-    paths = get_dir.get_all_file(path,[])
-    MAX = 2
-    hits = 0
-
-    training_instances = []
+    if os.path.isfile("./model/save_data"):
+        read_f = file('./model/save_data', 'rb')        
+        training_instances = cPickle.load(read_f)
+        anaphorics_result = cPickle.load(read_f)
+        test_instances = cPickle.load(read_f)
+        read_f.close()
+    else:
+        print >> sys.stderr, "Read W2V"
+        w2v = word2vec.Word2Vec(args.embedding)
     
-    done_zp_num = 0
+        path = args.data
+        paths = get_dir.get_all_file(path,[])
+        MAX = 2
     
-    ####  Training process  ####
-
-    for file_name in paths:
-        file_name = file_name.strip()
-        print >> sys.stderr, "Read File:%s <<-->> %d/%d"%(file_name,paths.index(file_name)+1,len(paths))
-
-        zps,azps,candi,nodes_info = get_info_from_file(file_name,2)
-
-        anaphorics = []
-        ana_zps = []
-        for (zp_sentence_index,zp_index,antecedents,is_azp) in azps:
-            if is_azp:
-                for (candi_sentence_index,begin_word_index,end_word_index) in antecedents:
-                    anaphorics.append((zp_sentence_index,zp_index,candi_sentence_index,begin_word_index,end_word_index))
-                    ana_zps.append((zp_sentence_index,zp_index))
-
-        for (sentence_index,zp_index) in zps:
-
-            if not (sentence_index,zp_index) in ana_zps:
-                continue
-            
-            done_zp_num += 1
-   
-            print >> sys.stderr,"------" 
-            this_sentence = get_sentence(sentence_index,zp_index,nodes_info)
-            print >> sys.stderr, "Sentence:",this_sentence
-
-            
-            zp = (sentence_index,zp_index)
-            zp_x_pre,zp_x_post = get_inputs(w2v,nodes_info,sentence_index,zp_index,zp_index,"zp")
-
-            zp_nl,zp_wl = nodes_info[sentence_index]
-            candi_number = 0
-            res_list = []
-            np_x_list = []
-
-            for ci in range(max(0,sentence_index-MAX),sentence_index+1):
+        training_instances = []
+        
+        done_zp_num = 0
+        
+        ####  Training process  ####
+    
+        for file_name in paths:
+            file_name = file_name.strip()
+            print >> sys.stderr, "Read File:%s <<-->> %d/%d"%(file_name,paths.index(file_name)+1,len(paths))
+    
+            zps,azps,candi,nodes_info = get_info_from_file(file_name,2)
+    
+            anaphorics = []
+            ana_zps = []
+            for (zp_sentence_index,zp_index,antecedents,is_azp) in azps:
+                if is_azp:
+                    for (candi_sentence_index,begin_word_index,end_word_index) in antecedents:
+                        anaphorics.append((zp_sentence_index,zp_index,candi_sentence_index,begin_word_index,end_word_index))
+                        ana_zps.append((zp_sentence_index,zp_index))
+    
+            for (sentence_index,zp_index) in zps:
+    
+                if not (sentence_index,zp_index) in ana_zps:
+                    continue
                 
-                candi_sentence_index = ci
-                candi_nl,candi_wl = nodes_info[candi_sentence_index] 
-
-                for (candi_begin,candi_end) in candi[candi_sentence_index]:
-                    if ci == sentence_index and candi_end > zp_index:
-                        continue
-                    candidate = (candi_sentence_index,candi_begin,candi_end)
-
-                    np_x = get_inputs(w2v,nodes_info,candi_sentence_index,candi_begin,candi_end,"np")
-
-                    res_result = 0
-                    if (sentence_index,zp_index,candi_sentence_index,candi_begin,candi_end) in anaphorics:
-                        res_result = 1
-
-                    if len(np_x) == 0:
-                        continue
-                    
-                    np_x_list.append(np_x)
-                    res_list.append(res_result)
-            if len(np_x_list) == 0:
-                continue
-            if sum(res_list) == 0:
-                continue
-            mask = add_mask(np_x_list) 
-            np_x_list = numpy.array(np_x_list,dtype = numpy.float32)
-            mask = numpy.array(mask,dtype = numpy.float32)
-            training_instances.append((zp_x_pre,zp_x_post,np_x_list,mask,res_list))
-
-    ####  Test process  ####
-
-    path = args.test_data
-    paths = get_dir.get_all_file(path,[])
-    test_instances = []
-    anaphorics_result = []
+                done_zp_num += 1
+       
+                print >> sys.stderr,"------" 
+                this_sentence = get_sentence(sentence_index,zp_index,nodes_info)
+                print >> sys.stderr, "Sentence:",this_sentence
     
-    done_zp_num = 0
-
-    for file_name in paths:
-        file_name = file_name.strip()
-        print >> sys.stderr, "Read File:%s <<-->> %d/%d"%(file_name,paths.index(file_name)+1,len(paths))
-
-        zps,azps,candi,nodes_info = get_info_from_file(file_name,2)
-
-        anaphorics = []
-        ana_zps = []
-        for (zp_sentence_index,zp_index,antecedents,is_azp) in azps:
-            if is_azp:
-                for (candi_sentence_index,begin_word_index,end_word_index) in antecedents:
-                    anaphorics.append((zp_sentence_index,zp_index,candi_sentence_index,begin_word_index,end_word_index))
-                    ana_zps.append((zp_sentence_index,zp_index))
-
-        for (sentence_index,zp_index) in zps:
-
-            if not (sentence_index,zp_index) in ana_zps:
-                continue
-
-            done_zp_num += 1
-   
-            print >> sys.stderr,"------" 
-            this_sentence = get_sentence(sentence_index,zp_index,nodes_info)
-            print >> sys.stderr, "Sentence:",this_sentence
-
-
-            zp = (sentence_index,zp_index)
-            zp_x_pre,zp_x_post = get_inputs(w2v,nodes_info,sentence_index,zp_index,zp_index,"zp")
-
-            zp_nl,zp_wl = nodes_info[sentence_index]
-            candi_number = 0
-            this_nodes_info = {} ## 为了节省存储空间
-            np_x_list = []
-            res_list = []
-            zp_candi_list = [] ## 为了存zp和candidate
-
-            for ci in range(max(0,sentence_index-MAX),sentence_index+1):
                 
-                candi_sentence_index = ci
-                candi_nl,candi_wl = nodes_info[candi_sentence_index] 
-
-                for (candi_begin,candi_end) in candi[candi_sentence_index]:
-                    if ci == sentence_index and candi_end > zp_index:
-                        continue
-                    candidate = (candi_sentence_index,candi_begin,candi_end)
-
-                    np_x = get_inputs(w2v,nodes_info,candi_sentence_index,candi_begin,candi_end,"np")
-
-                    res_result = 0
-                    if (sentence_index,zp_index,candi_sentence_index,candi_begin,candi_end) in anaphorics:
-                        res_result = 1
-
-                    if len(np_x) == 0:
-                        continue
+                zp = (sentence_index,zp_index)
+                zp_x_pre,zp_x_post = get_inputs(w2v,nodes_info,sentence_index,zp_index,zp_index,"zp")
+    
+                zp_nl,zp_wl = nodes_info[sentence_index]
+                candi_number = 0
+                res_list = []
+                np_x_list = []
+    
+                for ci in range(max(0,sentence_index-MAX),sentence_index+1):
                     
-                    np_x_list.append(np_x)
-                    res_list.append(res_result)
-                    zp_candi_list.append((zp,candidate))
+                    candi_sentence_index = ci
+                    candi_nl,candi_wl = nodes_info[candi_sentence_index] 
+    
+                    for (candi_begin,candi_end) in candi[candi_sentence_index]:
+                        if ci == sentence_index and candi_end > zp_index:
+                            continue
+                        candidate = (candi_sentence_index,candi_begin,candi_end)
+    
+                        np_x = get_inputs(w2v,nodes_info,candi_sentence_index,candi_begin,candi_end,"np")
+    
+                        res_result = 0
+                        if (sentence_index,zp_index,candi_sentence_index,candi_begin,candi_end) in anaphorics:
+                            res_result = 1
+    
+                        if len(np_x) == 0:
+                            continue
+                        
+                        np_x_list.append(np_x)
+                        res_list.append(res_result)
+                if len(np_x_list) == 0:
+                    continue
+                if sum(res_list) == 0:
+                    continue
+                mask = add_mask(np_x_list) 
+                np_x_list = numpy.array(np_x_list,dtype = numpy.float32)
+                mask = numpy.array(mask,dtype = numpy.float32)
+                training_instances.append((zp_x_pre,zp_x_post,np_x_list,mask,res_list))
+    
+        ####  Test process  ####
+    
+        path = args.test_data
+        paths = get_dir.get_all_file(path,[])
+        test_instances = []
+        anaphorics_result = []
+        
+        done_zp_num = 0
+    
+        for file_name in paths:
+            file_name = file_name.strip()
+            print >> sys.stderr, "Read File:%s <<-->> %d/%d"%(file_name,paths.index(file_name)+1,len(paths))
+    
+            zps,azps,candi,nodes_info = get_info_from_file(file_name,2)
+    
+            anaphorics = []
+            ana_zps = []
+            for (zp_sentence_index,zp_index,antecedents,is_azp) in azps:
+                if is_azp:
+                    for (candi_sentence_index,begin_word_index,end_word_index) in antecedents:
+                        anaphorics.append((zp_sentence_index,zp_index,candi_sentence_index,begin_word_index,end_word_index))
+                        ana_zps.append((zp_sentence_index,zp_index))
+    
+            for (sentence_index,zp_index) in zps:
+    
+                if not (sentence_index,zp_index) in ana_zps:
+                    continue
+    
+                done_zp_num += 1
+       
+                print >> sys.stderr,"------" 
+                this_sentence = get_sentence(sentence_index,zp_index,nodes_info)
+                print >> sys.stderr, "Sentence:",this_sentence
+    
+    
+                zp = (sentence_index,zp_index)
+                zp_x_pre,zp_x_post = get_inputs(w2v,nodes_info,sentence_index,zp_index,zp_index,"zp")
+    
+                zp_nl,zp_wl = nodes_info[sentence_index]
+                candi_number = 0
+                this_nodes_info = {} ## 为了节省存储空间
+                np_x_list = []
+                res_list = []
+                zp_candi_list = [] ## 为了存zp和candidate
+    
+                for ci in range(max(0,sentence_index-MAX),sentence_index+1):
+                    
+                    candi_sentence_index = ci
+                    candi_nl,candi_wl = nodes_info[candi_sentence_index] 
+    
+                    for (candi_begin,candi_end) in candi[candi_sentence_index]:
+                        if ci == sentence_index and candi_end > zp_index:
+                            continue
+                        candidate = (candi_sentence_index,candi_begin,candi_end)
+    
+                        np_x = get_inputs(w2v,nodes_info,candi_sentence_index,candi_begin,candi_end,"np")
+    
+                        res_result = 0
+                        if (sentence_index,zp_index,candi_sentence_index,candi_begin,candi_end) in anaphorics:
+                            res_result = 1
+    
+                        if len(np_x) == 0:
+                            continue
+                        
+                        np_x_list.append(np_x)
+                        res_list.append(res_result)
+                        zp_candi_list.append((zp,candidate))
+    
+                        this_nodes_info[candi_sentence_index] = nodes_info[candi_sentence_index]
+                        this_nodes_info[sentence_index] = nodes_info[sentence_index]
+    
+                        #this_zp_test_instence.append((zp_x_pre,zp_x_post,np_x,res_result,zp,candidate,this_nodes_info))
+                if len(np_x_list) == 0:
+                    continue
+    
+                mask = add_mask(np_x_list) 
+                np_x_list = numpy.array(np_x_list,dtype = numpy.float32)
+                mask = numpy.array(mask,dtype = numpy.float32)
+                
+                anaphorics_result.append(anaphorics)
+                test_instances.append((zp_x_pre,zp_x_post,np_x_list,mask,res_list,zp_candi_list,this_nodes_info))
 
-                    this_nodes_info[candi_sentence_index] = nodes_info[candi_sentence_index]
-                    this_nodes_info[sentence_index] = nodes_info[sentence_index]
+        w2v = None # 释放空间
 
-                    #this_zp_test_instence.append((zp_x_pre,zp_x_post,np_x,res_result,zp,candidate,this_nodes_info))
-            if len(np_x_list) == 0:
-                continue
-
-            mask = add_mask(np_x_list) 
-            np_x_list = numpy.array(np_x_list,dtype = numpy.float32)
-            mask = numpy.array(mask,dtype = numpy.float32)
-            
-            anaphorics_result.append(anaphorics)
-            test_instances.append((zp_x_pre,zp_x_post,np_x_list,mask,res_list,zp_candi_list,this_nodes_info))
-
-    w2v = None # 释放空间
+        save_f = file('./model/save_data', 'wb')
+        cPickle.dump(training_instances, save_f, protocol=cPickle.HIGHEST_PROTOCOL)
+        cPickle.dump(anaphorics_result, save_f, protocol=cPickle.HIGHEST_PROTOCOL)
+        cPickle.dump(test_instances, save_f, protocol=cPickle.HIGHEST_PROTOCOL)
+        save_f.close()
+               
 
     ##### begin train and test #####
     
     ## Build DL Model ## 
     print >> sys.stderr,"Building Model ..."
-    LSTM = network.NetWork(args.embedding_dimention,100,2)
-    #save_f = file('lstm_init_model', 'wb') 
-    #cPickle.dump(LSTM, save_f, protocol=cPickle.HIGHEST_PROTOCOL)
-    #save_f.close()
-
-    #best_f = file('lstm_init_model', 'rb')
-    #LSTM = cPickle.load(best_f)
-
+    
+    if os.path.isfile("./model/lstm_init_model"):
+        read_f = file('./model/lstm_init_model', 'rb')
+        LSTM = cPickle.load(read_f)
+    else: 
+        LSTM = network.NetWork(args.embedding_dimention,100,2)
+        save_f = file('./model/lstm_init_model', 'wb') 
+        cPickle.dump(LSTM, save_f, protocol=cPickle.HIGHEST_PROTOCOL)
+        save_f.close()
     
     for echo in range(args.echos): 
         print >> sys.stderr, "Echo for time",echo
