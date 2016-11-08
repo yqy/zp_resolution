@@ -965,7 +965,7 @@ def get_inputs(w2v,nodes_info,sentence_index,begin_index,end_index,ty):
         np_x = []
         #np_x.append(list([0.0]*args.embedding_dimention))
 
-        for i in range(begin_index-1,begin_index):
+        for i in range(begin_index-10,begin_index):
             if i >= 0 and i < len(twl):
                 em_x = w2v.get_vector_by_word_dl(twl[i].word)
                 if em_x is not None:
