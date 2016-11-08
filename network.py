@@ -153,7 +153,7 @@ class NetWork():
 
         dot_0 = self.zp_out*self.np_out
         attention_0 = softmax(T.sum(dot_0,axis=[1]))[0] 
-        zp_0 = T.sum(attention_0[:,None]*self.np_out,axis=0)
+        zp_0 = T.sum(attention_0[:,None]*self.np_out,axis=0) + self.zp_out
 
 
         dot = zp_0*self.np_out
@@ -162,7 +162,7 @@ class NetWork():
         
         attention = softmax(T.sum(dot,axis=[1]))[0] 
     
-        new_zp = T.sum(attention[:,None]*self.np_out,axis=0)
+        new_zp = T.sum(attention[:,None]*self.np_out,axis=0) + self.zp_out
 
 
         self.get_dot = theano.function(inputs=[self.zp_x_pre,self.zp_x_post,self.np_x,self.mask],outputs=[T.sum(dot,axis=[1])])
