@@ -177,8 +177,8 @@ class NetWork():
         l2_norm_squared = sum([(abs(w)).sum() for w in self.params])
 
         lmbda_l1 = 0.0
-        #lmbda_l2 = 0.0001
-        lmbda_l2 = 0.0
+        lmbda_l2 = 0.0001
+        #lmbda_l2 = 0.0
 
         t = T.bvector()
         #cost = -(T.log((self.out*t).sum()))
