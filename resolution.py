@@ -1296,4 +1296,4 @@ if args.type == "nn":
         print "Test Hits:",hits,"/",len(test_instances)
         get_prf(anaphorics_result,predict_result)
         sys.stdout.flush()
-
+    print >> sys.stderr,"Over for all"
