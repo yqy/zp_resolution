@@ -429,8 +429,40 @@ class LSTM_batch():
         return h_t,c_t
 
 
+class RNN():
+    def __init__(self,n_in,n_hidden,x=None):
+         
+        self.params = []
+        if x:
+            self.x = x
+        else:
+            self.x = T.matrix("x")
+
+        self.y = T.ivector("y")
+
+        w_in,b_in = init_weight(n_in,n_hidden) 
+        self.params += [w_in,b_in]
+
+        w_h,b_h = init_weight(n_hidden,n_hidden)
+        self.params += [w_h,b_h]     
+
+        h_t_0 = theano.shared(np.zeros(n_hidden, dtype=theano.config.floatX))
+        h, r = theano.scan(self.recurrent_fn, sequences = self.x,
+                       outputs_info = [h_t_0],
+                       non_sequences = [w_in ,w_h, b_h])
+
+        self.nn_out = h[-1]
+        self.all_hidden = h 
+
+
+    def recurrent_fn(self,x,h_t_1,w_in,w_h,b):
+        h_t = sigmoid(T.dot(h_t_1, w_h) + T.dot(x, w_in) + b)
+        return h_t
+
+
+
 class RNN_attention():
-    def __init__(self,n_in,n_hidden,n_out,attention,x=None):
+    def __init__(self,n_in,n_hidden,attention,x=None):
          
         self.params = []
         if x:
@@ -446,16 +478,12 @@ class RNN_attention():
         w_h,b_h = init_weight(n_hidden,n_hidden,pre="aRNN_h_")
         self.params += [w_h,b_h]     
 
-        #w_attention_x,b_attention = init_weight(n_in,1,pre="aRNN_attention_x_") 
         w_attention_x,b_attention = init_weight(n_in,n_hidden,pre="aRNN_attention_x_") 
         self.params += [w_attention_x,b_attention]
-        #self.params += [b_attention]
 
-        #w_attention_a,b_attention_a = init_weight(n_hidden*2,1,pre="aRNN_attention_a_") 
         w_attention_a,b_attention_a = init_weight(n_hidden*2,n_hidden,pre="aRNN_attention_a_") 
         self.params += [w_attention_a]
 
-        #w_attention_h,b_attention_h = init_weight(n_hidden,1,pre="aRNN_attention_a_") 
         w_attention_h,b_attention_h = init_weight(n_hidden,n_hidden,pre="aRNN_attention_a_") 
         self.params += [w_attention_h]
 
@@ -464,14 +492,10 @@ class RNN_attention():
                        outputs_info = [h_t_0],
                        non_sequences = [w_in ,w_h, b_h, w_attention_x,b_attention,w_attention_a,attention,w_attention_h])
 
-        #w_out,b_out = init_weight(n_hidden,n_out,pre="aRNN_out_")
-        #self.params += [w_out]      
-
         self.nn_out = h[-1]
-        #self.nn_out = T.dot(h[-1],w_out)
+        self.all_hidden = h
 
     def recurrent_fn(self,x,h_t_1,w_in,w_h,b,w_attention_x,b_attention,w_attention_a,attention,w_attention_h):
-        #h_t_ = sigmoid(T.dot(h_t_1, w_h) + T.dot(x, w_in) + b)
         h_t_ = tanh(T.dot(h_t_1, w_h) + T.dot(x, w_in) + b)
         #ih = tanh(T.dot(x,w_attention_x)+b_attention + T.dot(attention,w_attention_a) + T.dot(h_t_1,w_attention_h))
         #ih = sigmoid(T.dot(x,w_attention_x)+b_attention + T.dot(attention,w_attention_a) + T.dot(h_t_1,w_attention_h))
@@ -556,64 +580,6 @@ class Add_Layer():
         return h_t
 
 
-class RNN():
-    def __init__(self,n_in,n_hidden,n_out,x=None):
-         
-        self.params = []
-        if x:
-            self.x = x
-        else:
-            self.x = T.matrix("x")
-
-        self.y = T.ivector("y")
-
-        w_in,b_in = init_weight(n_in,n_hidden) 
-        self.params += [w_in,b_in]
-
-        w_h,b_h = init_weight(n_hidden,n_hidden)
-        self.params += [w_h,b_h]     
-
-        h_t_0 = theano.shared(np.zeros(n_hidden, dtype=theano.config.floatX))
-        h, r = theano.scan(self.recurrent_fn, sequences = self.x,
-                       outputs_info = [h_t_0],
-                       non_sequences = [w_in ,w_h, b_h])
-
-        w_out,b_out = init_weight(n_hidden,n_out)
-        self.params += [w_out,b_out]      
-
-        self.nn_out = sigmoid(T.dot(h[-1],w_out) + b_out) 
-
-        self.out = softmax(self.nn_out)
-
-        self.predict_y = theano.function(inputs=[self.x],outputs=[self.out])
-
-        l1_norm_squared = sum([(w**2).sum() for w in self.params])
-        l2_norm_squared = sum([(abs(w)).sum() for w in self.params])
-
-        lmbda_l1 = 0.0005
-        lmbda_l2 = 0.0
-
-        t = T.bscalar() #标准分类结果
-        cost = -(T.log(self.out[0])[t]) +\
-            lmbda_l1*l1_norm_squared + lmbda_l2*l2_norm_squared
-
-        self.c = theano.function(inputs=[self.x,t],outputs=[cost])
-
-        lr = T.scalar()
-        grads = T.grad(cost, self.params)
-        updates = [(param, param-lr*grad)
-            for param, grad in zip(self.params, grads)]
-
-        self.train_step = theano.function(inputs=[self.x, t, lr], outputs=[cost],
-                            on_unused_input='warn',
-                            updates=updates
-                            #allow_input_downcast=True
-                            #allow_input_downcast=None
-                            )
-
-    def recurrent_fn(self,x,h_t_1,w_in,w_h,b):
-        h_t = sigmoid(T.dot(h_t_1, w_h) + T.dot(x, w_in) + b)
-        return h_t
 
 def main():
     r = NetWork(2,2,4,2)
