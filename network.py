@@ -138,11 +138,17 @@ class NetWork():
         self.np_x = T.tensor3("np_x")
         self.mask = T.matrix("mask")
     
-        self.np_nn = LSTM_batch(embedding_dimention,n_hidden*2,self.np_x,self.mask)
-        self.params += self.np_nn.params
+        self.np_nn_in = LSTM_batch(embedding_dimention,n_hidden*2,self.np_x,self.mask)
+        self.params += self.np_nn_in.params
+
+        self.np_nn_out = LSTM_batch(embedding_dimention,n_hidden*2,self.np_x,self.mask)
+        self.params += self.np_nn_out.params
+
+
         #self.np_out = self.np_nn.nn_out
-        self.np_out = (self.np_nn.all_hidden).mean(axis=1)
-        self.get_np_out = theano.function(inputs=[self.np_x,self.mask],outputs=[self.np_out])
+        self.np_in_output = (self.np_nn_in.all_hidden).mean(axis=1)
+        self.np_out_output = (self.np_nn_out.all_hidden).mean(axis=1)
+        self.get_np_out = theano.function(inputs=[self.np_x,self.mask],outputs=[self.np_in_output])
 
         
         ### get attention for ZP and NP ###
@@ -153,18 +159,19 @@ class NetWork():
         
         #dot = self.np_out*nz[-1]
 
-        dot_0 = self.zp_out*self.np_out
+        #dot_0 = self.zp_out*self.np_out
+        dot_0 = self.zp_out*self.np_in_output
         attention_0 = softmax(T.sum(dot_0,axis=[1]))[0] 
-        zp_0 = T.sum(attention_0[:,None]*self.np_out,axis=0) + self.zp_out
+        zp_0 = T.sum(attention_0[:,None]*self.np_out_output,axis=0) + self.zp_out
 
 
-        dot = zp_0*self.np_out
+        dot = zp_0*self.np_in_output
 
-        self.get_dot = theano.function(inputs=[self.zp_x_pre,self.zp_x_post,self.np_x,self.mask],outputs=[T.sum(dot,axis=[1])])
+        #self.get_dot = theano.function(inputs=[self.zp_x_pre,self.zp_x_post,self.np_x,self.mask],outputs=[T.sum(dot,axis=[1])])
         
         attention = softmax(T.sum(dot,axis=[1]))[0] 
     
-        new_zp = T.sum(attention[:,None]*self.np_out,axis=0) + self.zp_out
+        new_zp = T.sum(attention[:,None]*self.np_out_output,axis=0) + self.zp_out
 
 
         self.get_dot = theano.function(inputs=[self.zp_x_pre,self.zp_x_post,self.np_x,self.mask],outputs=[T.sum(dot,axis=[1])])
