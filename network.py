@@ -19,12 +19,12 @@ import lasagne
 #theano.config.exception_verbosity="high"
 #theano.config.optimizer="fast_compile"
 
-#对于RNN的神经网络
-#一个LSTM for ZP
-#一个attention-RNN for NP
+
 
 '''
-Created by qyyin 2015.11.16
+Deep neural network for AZP resolution
+a kind of Memory Network
+Created by qyyin 2016.11.10
 '''
 
 #activation function
@@ -44,7 +44,7 @@ else:
     print >> sys.stderr,"Running with a CPU. If this is not desired,then modify the \n NetWork.py to set\nthe GPU flag to True."
     theano.config.floatX = 'float64'
 
-def init_weight(n_in,n_out,activation_fn=sigmoid,pre="",uni=False,ones=False):
+def init_weight(n_in,n_out,activation_fn=sigmoid,pre="",uni=True,ones=False):
     rng = np.random.RandomState(1234)
     if uni:
         W_values = np.asarray(rng.normal(size=(n_in, n_out), scale= .01, loc = .0), dtype = theano.config.floatX)
@@ -62,16 +62,7 @@ def init_weight(n_in,n_out,activation_fn=sigmoid,pre="",uni=False,ones=False):
             W_values /= 6
 
     b_values = np.zeros((n_out,), dtype=theano.config.floatX)
-    '''
-    b_values = np.asarray(
-        rng.uniform(
-            low=-np.sqrt(1. / np.sqrt(n_out)),
-            high=np.sqrt(1. / np.sqrt(n_out)),
-            size=(n_out,)
-            ),
-        dtype=theano.config.floatX
-    )
-    '''
+
     if ones:
         b_values = np.ones((n_out,), dtype=theano.config.floatX)
 
@@ -98,7 +89,7 @@ class Layer():
     
         self.output = activation_fn(T.dot(self.inpt, self.w) + self.b)
 
-class fakeLayer():
+class LinearLayer():
     def __init__(self,n_in,n_out,inpt,activation_fn=tanh):
         self.params = []
         if inpt:
@@ -111,7 +102,18 @@ class fakeLayer():
     
         self.output = T.dot(self.inpt, self.w)
 
-
+def _dropout_from_layer(layer, p=0.5):
+    """p is the probablity of dropping a unit
+    """
+    rng = np.random.RandomState(1234)
+    srng = theano.tensor.shared_randomstreams.RandomStreams(
+            rng.randint(999999))
+    # p=1-p because 1's indicate keep and p is prob of dropping
+    mask = srng.binomial(n=1, p=1-p, size=layer.shape)
+    # The cast is important because
+    # int * float32 = float64 which pulls things off the gpu
+    output = layer * T.cast(mask, theano.config.floatX)
+    return output
 
 class NetWork():
     def __init__(self,n_hidden,embedding_dimention=50,hope_num=1):
@@ -121,13 +123,22 @@ class NetWork():
         ##n_hidden_sequence: sequence lstm的隐层维度 因为要同zp的结合做dot，所以其维度要是n_hidden的2倍
         ##                   即 n_hidden_sequence = 2 * n_hidden
         self.params = []
+
+        #self.dot_output_dropout = _dropout_from_layer(self.dot_output,p=0.2)
+
         self.zp_x_pre = T.matrix("zp_x_pre")
         self.zp_x_post = T.matrix("zp_x_post")
+        
+        self.zp_x_pre_dropout = _dropout_from_layer(self.zp_x_pre)
+        self.zp_x_post_dropout = _dropout_from_layer(self.zp_x_post)
 
-        zp_nn_pre = LSTM(embedding_dimention,n_hidden,self.zp_x_pre)
+
+        #zp_nn_pre = LSTM(embedding_dimention,n_hidden,self.zp_x_pre)
+        zp_nn_pre = LSTM(embedding_dimention,n_hidden,self.zp_x_pre_dropout)
         self.params += zp_nn_pre.params
         
-        zp_nn_post = LSTM(embedding_dimention,n_hidden,self.zp_x_post)
+        #zp_nn_post = LSTM(embedding_dimention,n_hidden,self.zp_x_post)
+        zp_nn_post = LSTM(embedding_dimention,n_hidden,self.zp_x_post_dropout)
         self.params += zp_nn_post.params
 
         self.zp_out = T.concatenate((zp_nn_pre.nn_out,zp_nn_post.nn_out))
@@ -136,12 +147,16 @@ class NetWork():
     
         ### get sequence output for NP ###
         self.np_x = T.tensor3("np_x")
+        self.np_x_dropout = _dropout_from_layer(self.np_x)
+
         self.mask = T.matrix("mask")
     
-        self.np_nn_in = LSTM_batch(embedding_dimention,n_hidden*2,self.np_x,self.mask)
+        #self.np_nn_in = LSTM_batch(embedding_dimention,n_hidden*2,self.np_x,self.mask)
+        self.np_nn_in = LSTM_batch(embedding_dimention,n_hidden*2,self.np_x_dropout,self.mask)
         self.params += self.np_nn_in.params
 
-        self.np_nn_out = LSTM_batch(embedding_dimention,n_hidden*2,self.np_x,self.mask)
+        #self.np_nn_out = LSTM_batch(embedding_dimention,n_hidden*2,self.np_x,self.mask)
+        self.np_nn_out = LSTM_batch(embedding_dimention,n_hidden*2,self.np_x_dropout,self.mask)
         self.params += self.np_nn_out.params
 
 
@@ -186,7 +201,7 @@ class NetWork():
         l2_norm_squared = sum([(abs(w)).sum() for w in self.params])
 
         lmbda_l1 = 0.0
-        lmbda_l2 = 0.0001
+        lmbda_l2 = 0.001
         #lmbda_l2 = 0.0
 
         t = T.bvector()
@@ -229,7 +244,7 @@ class NetWork():
 
 
 
-class LSTM_need():
+class LSTM_attention():
     def __init__(self,n_in,n_hidden,x=None,prefix=""):
          
         self.params = []
@@ -429,6 +444,50 @@ class LSTM_batch():
         return h_t,c_t
 
 
+class RNN_batch():
+    def __init__(self,n_in,n_hidden,x=T.tensor3("x"),mask=T.matrix("mask"),prefix=""):
+         
+        self.params = []
+        if x is not None:
+            self.x = x
+        else:
+            self.x = T.tensor3("x")
+
+        if mask is not None:
+            self.mask = mask
+        else:
+            self.mask = T.matrix("mask")
+
+        #### 转置 为了进行scan运算 ###
+    
+        nmask = T.transpose(self.mask,axes=(1,0))
+        nx = T.transpose(self.x,axes=(1,0,2))
+
+        w_x,b = init_weight(n_in,n_hidden,pre="%s_lstm_f_x_"%prefix) 
+        self.params += [w_x,b]
+
+        w_h,b_h = init_weight(n_hidden,n_hidden,pre="%s_lstm_f_h_"%prefix)
+        self.params += [w_h]     
+
+        h_t_0 = T.alloc(0., x.shape[0], n_hidden)
+
+        h,r = theano.scan(self.recurrent_fn, sequences = [nx,nmask],
+                       outputs_info = [h_t_0],
+                       non_sequences = [w_x,w_h,b])
+
+        self.all_hidden = T.transpose(h,axes=(1,0,2))
+        self.nn_out = h[-1]
+
+    def recurrent_fn(self,x,mask,h_t_1,w_x,w_h,b):
+
+        h_t_this = ot*tanh(T.dot(x,w_x) + T.dot(h_t_1,w_h) + b)
+
+        h_t = mask[:, None] * h_t_this + (1. - mask)[:, None] * h_t_1
+
+        return h_t
+
+
+
 class RNN():
     def __init__(self,n_in,n_hidden,x=None):
          
@@ -504,83 +563,6 @@ class RNN_attention():
         h_t = h_t_ * ih
         return h_t
 
-
-class aAdd_Layer():
-    def __init__(self,n_hidden,x=None):
-         
-        self.params = []
-        if x:
-            self.x = x
-        else:
-            #self.x = T.matrix("x")
-            self.x = T.tensor3("x")
-
-        l_in = lasagne.layers.InputLayer(shape=(None, None, 2))
-        l_forward_1 = lasagne.layers.LSTMLayer(
-        l_in, 3, 
-        nonlinearity=lasagne.nonlinearities.tanh)
-
-        l_forward_slice = lasagne.layers.SliceLayer(l_forward_1, -1, 1)
-
-        lstm_out = lasagne.layers.get_output(l_forward_slice)
-
-        self.get_lstm_out = theano.function(inputs=[l_in.input_var],outputs=[lstm_out])
-       
- 
-        #self.give_x = T.matrix("xx")
-
-        #self.add = Add_Layer(3,lstm_out)
- 
-        h_t_0 = theano.shared(np.zeros(n_hidden, dtype=theano.config.floatX))
-        h, r = theano.scan(self.recurrent_fn, sequences = lstm_out,
-                       outputs_info = [h_t_0])
-
-        self.nn_out = h[-1]
-        self.out = h
-
-        self.get_out = theano.function(inputs=[l_in.input_var],outputs=[h])
-
-        cost = (self.nn_out[0]).mean()
-
-        all_params = lasagne.layers.get_all_params(l_forward_slice,trainable=True)
-        updates = lasagne.updates.adagrad(cost, all_params)
-        self.train = theano.function([l_in.input_var], cost, updates=updates, allow_input_downcast=True)
-
-
-    def recurrent_fn(self,x,h_t_1):
-        #self.add.x = x
-        #heihei = self.add.nn_out
-        #heihei = self.add.get_out(x)
-        h_t = x + h_t_1
-        return h_t
-
-
-class Add_Layer():
-    def __init__(self,n_hidden,x=None):
-         
-        self.params = []
-        if x:
-            self.x = x
-        else:
-            self.x = T.matrix("x")
-        
-        h_t_0 = theano.shared(np.zeros(n_hidden, dtype=theano.config.floatX))
-        h, r = theano.scan(self.recurrent_fn, sequences = self.x,
-                       outputs_info = [h_t_0])
-
-        self.nn_out = h[-1]
-        self.out = h
-
-        self.get_out = theano.function(inputs=[self.x],outputs=[h[-1]])
-
-
-
-    def recurrent_fn(self,x,h_t_1):
-        h_t = x + h_t_1
-        return h_t
-
-
-
 def main():
     r = NetWork(2,2,4,2)
     t = [0,1,0]
@@ -629,42 +611,6 @@ def main():
     r.show_para()
     '''
 
-def test():
-    #add = Add_Layer(2) 
-    #zp_x = [[2,3],[1,2],[2,3]]
-    #print add.get_out(zp_x)   
-    zp_xx = [[[2,3],[1,2],[2,3]],[[2,3],[1,2],[2,3]],[[2,3],[1,2],[2,3]]]
-    zp_xxx = [[[0,0],[2,3],[1,2],[2,3]],[[0,0],[2,3],[1,2],[2,3]],[[0,0],[2,3],[1,2],[2,3]]]
-
-    l_in = lasagne.layers.InputLayer(shape=(None, None, 2))
-    l_forward_1 = lasagne.layers.LSTMLayer(
-        l_in, 3, 
-        nonlinearity=lasagne.nonlinearities.tanh)
-
-    l_forward_slice = lasagne.layers.SliceLayer(l_forward_1, -1, 1)
-
-    out = lasagne.layers.get_output(l_forward_slice)
-
-    f = theano.function(inputs=[l_in.input_var],outputs=[out])
-
-    print f(zp_xx)
-
-    addd = aAdd_Layer(3)
-    print addd.get_lstm_out(zp_xx)   
-    print addd.get_out(zp_xx)   
-
-    addd.train(zp_xx)
-    addd.train(zp_xx)
-    print addd.get_out(zp_xx)   
-
-    print addd.get_lstm_out(zp_xxx)   
-    print addd.get_out(zp_xxx)   
-
-
- 
-def test_fn(self,x,h_t_1,w_in,w_h,b):
-    h_t = sigmoid(T.dot(h_t_1, w_h) + T.dot(x, w_in) + b)
-    return h_t
 def test_batch():
     x = [[[1,1],[1,1],[1,1]],[[2,2],[2,2],[2,2]],[[3,3],[3,3],[3,3]],[[4,4],[4,4],[4,4]]]
     mask = [[1,0,1],[1,1,1],[0,0,1],[0,1,1]]

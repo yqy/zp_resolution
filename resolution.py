@@ -6,6 +6,7 @@ import argparse
 import math
 import timeit
 import numpy
+import random
 
 from conf import *
 from buildTree import get_info_from_file
@@ -1212,6 +1213,9 @@ if args.type == "nn":
         print >> sys.stderr, "Echo for time",echo
         start_time = timeit.default_timer()
         cost = 0.0
+
+        random.shuffle(training_instances)
+
         for zp_x_pre,zp_x_post,np_x,mask,res_list in training_instances:
             #print np_x,mask,res_list
 
@@ -1262,8 +1266,6 @@ if args.type == "nn":
                 if res_list[max_index] == 1:
                     hits += 1
 
-                print outputs
-                
                 st_score = 0.0
                 predict_items = None
                 numOfCandi = 0
