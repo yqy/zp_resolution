@@ -9,7 +9,7 @@ while True:
     if line == "Begin test":
         ## new test ##
         echo_num += 1
-        print "Turn,"echo_num
+        print "Turn ",echo_num
 
         zp_num = 0
         while True:
