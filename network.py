@@ -217,8 +217,8 @@ class NetWork():
         #updates = [(param, param-lr*grad)
         #    for param, grad in zip(self.params, grads)]
         
-        updates = lasagne.updates.sgd(cost, self.params, lr)
-        #updates = lasagne.updates.adadelta(cost, self.params)
+        #updates = lasagne.updates.sgd(cost, self.params, lr)
+        updates = lasagne.updates.adadelta(cost, self.params)
 
         
         self.train_step = theano.function(inputs=[self.zp_x_pre,self.zp_x_post,self.np_x,self.mask,t,lr], outputs=[cost],
