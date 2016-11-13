@@ -30,15 +30,15 @@ while True:
                     if len(line) == 4:
                         items.append((line[1],line[2],float(line[3].split(":")[1]))) 
 
-                    this_score = 0.0
-                    this_tag = "0"
-                    for tag,word,score in items:
-                        if score >= this_score:
-                            this_score = score
-                            this_tag = tag
+                this_score = 0.0
+                this_tag = "0"
+                for tag,word,score in items:
+                    if score >= this_score:
+                        this_score = score
+                        this_tag = tag
 
-                    if this_tag == "1":
-                        hits += 1
+                if this_tag == "1":
+                    hits += 1
             if line.endswith("seconds!"):
                 print zp_num,hits
                 ### out ###
