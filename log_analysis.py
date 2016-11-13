@@ -30,17 +30,27 @@ while True:
                     if len(line) == 4:
                         items.append((line[1],line[2],float(line[3].split(":")[1]))) 
 
-                this_score = 0.2
+                #this_score = 0.5
+                this_score = 0.0
                 
                 tag,word,score = items[-1]
                 this_tag = tag
 
+                this_dict = {}
+                for tag,word,score in items:
+                    this_dict.setdefault(word,0.0)
+                    this_dict[word] += score
+
                 num = 0
                 for tag,word,score in items:
+                    real_score = this_dict[word]
+                    #if real_score >= this_score:
+                        #this_score = real_score
                     if score >= this_score:
-                        #this_score = score
+                        this_score = score
+
                         this_tag = tag
-                    this_score = (this_score*num+score)/(num+1)
+                    #this_score = (this_score*num+score)/(num+1)
                     num += 1
 
                 if this_tag == "1":

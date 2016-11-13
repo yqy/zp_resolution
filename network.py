@@ -162,7 +162,8 @@ class NetWork():
 
         #self.np_out = self.np_nn.nn_out
         self.np_in_output = (self.np_nn_in.all_hidden).mean(axis=1)
-        self.np_out_output = (self.np_nn_out.all_hidden).mean(axis=1)
+        #self.np_out_output = (self.np_nn_out.all_hidden).mean(axis=1)
+        self.np_out_output = self.np_nn_out.nn_out
         self.get_np_out = theano.function(inputs=[self.np_x,self.mask],outputs=[self.np_in_output])
 
         
