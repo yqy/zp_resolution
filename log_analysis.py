@@ -32,10 +32,13 @@ while True:
 
                 this_score = 0.0
                 this_tag = "0"
+                num = 0
                 for tag,word,score in items:
                     if score >= this_score:
-                        this_score = score
+                        #this_score = score
                         this_tag = tag
+                    this_score = (this_score*num+score)/(num+1)
+                    num += 1
 
                 if this_tag == "1":
                     hits += 1
