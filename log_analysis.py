@@ -30,8 +30,11 @@ while True:
                     if len(line) == 4:
                         items.append((line[1],line[2],float(line[3].split(":")[1]))) 
 
-                this_score = 0.0
-                this_tag = "0"
+                this_score = 0.2
+                
+                tag,word,score = items[-1]
+                this_tag = tag
+
                 num = 0
                 for tag,word,score in items:
                     if score >= this_score:
