@@ -129,19 +129,20 @@ class NetWork():
         self.zp_x_pre = T.matrix("zp_x_pre")
         self.zp_x_post = T.matrix("zp_x_post")
         
-        self.zp_x_pre_dropout = _dropout_from_layer(self.zp_x_pre)
-        self.zp_x_post_dropout = _dropout_from_layer(self.zp_x_post)
+        #self.zp_x_pre_dropout = _dropout_from_layer(self.zp_x_pre)
+        #self.zp_x_post_dropout = _dropout_from_layer(self.zp_x_post)
 
 
-        #zp_nn_pre = LSTM(embedding_dimention,n_hidden,self.zp_x_pre)
-        zp_nn_pre = LSTM(embedding_dimention,n_hidden,self.zp_x_pre_dropout)
+        zp_nn_pre = LSTM(embedding_dimention,n_hidden,self.zp_x_pre)
+        #zp_nn_pre = LSTM(embedding_dimention,n_hidden,self.zp_x_pre_dropout)
         self.params += zp_nn_pre.params
         
-        #zp_nn_post = LSTM(embedding_dimention,n_hidden,self.zp_x_post)
-        zp_nn_post = LSTM(embedding_dimention,n_hidden,self.zp_x_post_dropout)
+        zp_nn_post = LSTM(embedding_dimention,n_hidden,self.zp_x_post)
+        #zp_nn_post = LSTM(embedding_dimention,n_hidden,self.zp_x_post_dropout)
         self.params += zp_nn_post.params
 
         self.zp_out = T.concatenate((zp_nn_pre.nn_out,zp_nn_post.nn_out))
+        self.zp_out_dropout = _dropout_from_layer(T.concatenate((zp_nn_pre.nn_out,zp_nn_post.nn_out)))
         
         self.get_zp_out = theano.function(inputs=[self.zp_x_pre,self.zp_x_post],outputs=[self.zp_out])
     
@@ -162,6 +163,7 @@ class NetWork():
 
         #self.np_out = self.np_nn.nn_out
         self.np_in_output = (self.np_nn_in.all_hidden).mean(axis=1)
+        self.np_in_output_dropout = _dropout_from_layer((self.np_nn_in.all_hidden).mean(axis=1))
         #self.np_out_output = (self.np_nn_out.all_hidden).mean(axis=1)
         self.np_out_output = self.np_nn_out.nn_out
         self.get_np_out = theano.function(inputs=[self.np_x,self.mask],outputs=[self.np_in_output])
@@ -177,15 +179,22 @@ class NetWork():
 
         #dot_0 = self.zp_out*self.np_out
         dot_0 = self.zp_out*self.np_in_output
+        dot_0_dropout = self.zp_out_dropout*self.np_in_output_dropout
+
         attention_0 = softmax(T.sum(dot_0,axis=[1]))[0] 
+        attention_0_dropout = softmax(T.sum(dot_0_dropout,axis=[1]))[0] 
+
         zp_0 = T.sum(attention_0[:,None]*self.np_out_output,axis=0) + self.zp_out
+        zp_0_dropout = T.sum(attention_0_dropout[:,None]*self.np_out_output,axis=0) + self.zp_out
 
 
         dot = zp_0*self.np_in_output
+        dot_dropout = zp_0_dropout*self.np_in_output_dropout
 
         #self.get_dot = theano.function(inputs=[self.zp_x_pre,self.zp_x_post,self.np_x,self.mask],outputs=[T.sum(dot,axis=[1])])
         
         attention = softmax(T.sum(dot,axis=[1]))[0] 
+        attention_dropout = softmax(T.sum(dot_dropout,axis=[1]))[0] 
     
         new_zp = T.sum(attention[:,None]*self.np_out_output,axis=0) + self.zp_out
 
@@ -195,6 +204,8 @@ class NetWork():
 
 
         self.out = attention
+        self.out_dropout = attention_dropout
+
         self.get_out = theano.function(inputs=[self.zp_x_pre,self.zp_x_post,self.np_x,self.mask],outputs=[self.out])
 
         
@@ -207,7 +218,7 @@ class NetWork():
 
         t = T.bvector()
         #cost = -(T.log((self.out*t).sum()))
-        cost = -(T.log((self.out*t).sum()))
+        cost = -(T.log((self.out_dropout*t).sum()))
         #cost = 1-((self.out*t).sum())
 
         self.get_cost = theano.function(inputs=[self.zp_x_pre,self.zp_x_post,self.np_x,self.mask,t],outputs=[cost])
