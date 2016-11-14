@@ -148,16 +148,16 @@ class NetWork():
     
         ### get sequence output for NP ###
         self.np_x = T.tensor3("np_x")
-        self.np_x_dropout = _dropout_from_layer(self.np_x)
+        #self.np_x_dropout = _dropout_from_layer(self.np_x)
 
         self.mask = T.matrix("mask")
     
-        #self.np_nn_in = LSTM_batch(embedding_dimention,n_hidden*2,self.np_x,self.mask)
-        self.np_nn_in = LSTM_batch(embedding_dimention,n_hidden*2,self.np_x_dropout,self.mask)
+        self.np_nn_in = LSTM_batch(embedding_dimention,n_hidden*2,self.np_x,self.mask)
+        #self.np_nn_in = LSTM_batch(embedding_dimention,n_hidden*2,self.np_x_dropout,self.mask)
         self.params += self.np_nn_in.params
 
-        #self.np_nn_out = LSTM_batch(embedding_dimention,n_hidden*2,self.np_x,self.mask)
-        self.np_nn_out = LSTM_batch(embedding_dimention,n_hidden*2,self.np_x_dropout,self.mask)
+        self.np_nn_out = LSTM_batch(embedding_dimention,n_hidden*2,self.np_x,self.mask)
+        #self.np_nn_out = LSTM_batch(embedding_dimention,n_hidden*2,self.np_x_dropout,self.mask)
         self.params += self.np_nn_out.params
 
 
