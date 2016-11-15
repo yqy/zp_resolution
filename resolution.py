@@ -988,6 +988,28 @@ def get_inputs(w2v,nodes_info,sentence_index,begin_index,end_index,ty):
         '''
         return np_x
 
+    elif ty == "npc":
+        ### get for NP context ###
+        tnl,twl = nodes_info[sentence_index]
+
+        pre_zp_x = []
+        pre_zp_x.append(list([0.0]*args.embedding_dimention))
+        for i in range(0,begin_index):
+            if i >= 0 and i < len(twl):
+                em_x = w2v.get_vector_by_word_dl(twl[i].word)
+                if em_x is not None:
+                    pre_zp_x.append(list(em_x))
+
+        post_zp_x = []
+        for i in range(end_index+1,len(twl)):
+            if i >= 0 and i < len(twl):
+                em_x = w2v.get_vector_by_word_dl(twl[i].word)
+                if em_x is not None:
+                    post_zp_x.append(list(em_x))
+        post_zp_x.append(list([0.0]*args.embedding_dimention))
+        post_zp_x = post_zp_x[::-1]
+        return (pre_zp_x,post_zp_x)
+
 
 def add_mask(np_x_list):
     add_item = list([0.0]*args.embedding_dimention)
@@ -1001,8 +1023,10 @@ def add_mask(np_x_list):
     for np_x in np_x_list:
         mask = len(np_x)*[1]
         for i in range(max_len-len(np_x)):
-            np_x.append(add_item)
-            mask.append(0)
+            #np_x.append(add_item)
+            #mask.append(0)
+            np_x.insert(0,add_item)
+            mask.insert(0,0)
         masks.append(mask)
     return masks
 
@@ -1262,6 +1286,325 @@ if args.type == "nn":
                 print >> sys.stderr, "Candidates:"
 
                 outputs = list(LSTM.get_out(zp_x_pre,zp_x_post,np_x_list,mask)[0])
+                max_index = find_max(outputs)
+                if res_list[max_index] == 1:
+                    hits += 1
+
+                st_score = 0.0
+                predict_items = None
+                numOfCandi = 0
+                predict_str_log = None
+                for i in range(len(zp_candi_list)): 
+                    zp,candidate = zp_candi_list[i]
+                    nn_predict = outputs[i]
+                    res_result = res_list[i]
+                
+                    candi_sentence_index,candi_begin,candi_end = candidate
+                    candi_str = "\t".join(get_candi_info(candi_sentence_index,nodes_info,candi_begin,candi_end,res_result))
+                    if nn_predict >= st_score: 
+                        predict_items = (zp,candidate)
+                        st_score = nn_predict
+                        predict_str_log = "%d\t%s\tPredict:%f"%(numOfCandi,candi_str,nn_predict)
+                    print >> sys.stderr,"%d\t%s\tPredict:%f"%(numOfCandi,candi_str,nn_predict)
+                    numOfCandi += 1
+
+                predict_zp,predict_candidate = predict_items
+                sentence_index,zp_index = predict_zp 
+                predict_candi_sentence_index,predict_candi_begin,predict_candi_end = predict_candidate
+
+                predict_result.append((sentence_index,zp_index,predict_candi_sentence_index,predict_candi_begin,predict_candi_end))
+                print >> sys.stderr, "Results:"
+                print >> sys.stderr, "Predict -- %s"%predict_str_log
+                print >> sys.stderr, "Done ZP #%d/%d"%(numOfZP,len(test_instances))
+
+        print >> sys.stderr, "Test Hits:",hits,"/",len(test_instances)
+        print "Echo",echo 
+        print "Test Hits:",hits,"/",len(test_instances)
+        get_prf(anaphorics_result,predict_result)
+        sys.stdout.flush()
+    print >> sys.stderr,"Over for all"
+
+
+
+if args.type == "nn_new":
+
+    if os.path.isfile("./model/save_data"):
+        print >> sys.stderr,"Read from file ./model/save_data"
+        read_f = file('./model/save_data', 'rb')        
+        training_instances = cPickle.load(read_f)
+        anaphorics_result = cPickle.load(read_f)
+        test_instances = cPickle.load(read_f)
+        read_f.close()
+    else:
+        print >> sys.stderr, "Read W2V"
+        w2v = word2vec.Word2Vec(args.embedding)
+    
+        path = args.data
+        paths = get_dir.get_all_file(path,[])
+        MAX = 2
+    
+        training_instances = []
+        
+        done_zp_num = 0
+        
+        ####  Training process  ####
+    
+        for file_name in paths:
+            file_name = file_name.strip()
+            print >> sys.stderr, "Read File:%s <<-->> %d/%d"%(file_name,paths.index(file_name)+1,len(paths))
+    
+            zps,azps,candi,nodes_info = get_info_from_file(file_name,2)
+    
+            anaphorics = []
+            ana_zps = []
+            for (zp_sentence_index,zp_index,antecedents,is_azp) in azps:
+                if is_azp:
+                    for (candi_sentence_index,begin_word_index,end_word_index) in antecedents:
+                        anaphorics.append((zp_sentence_index,zp_index,candi_sentence_index,begin_word_index,end_word_index))
+                        ana_zps.append((zp_sentence_index,zp_index))
+    
+            for (sentence_index,zp_index) in zps:
+    
+                if not (sentence_index,zp_index) in ana_zps:
+                    continue
+                
+                done_zp_num += 1
+       
+                print >> sys.stderr,"------" 
+                this_sentence = get_sentence(sentence_index,zp_index,nodes_info)
+                print >> sys.stderr, "Sentence:",this_sentence
+    
+                
+                zp = (sentence_index,zp_index)
+                zp_x_pre,zp_x_post = get_inputs(w2v,nodes_info,sentence_index,zp_index,zp_index,"zp")
+    
+                zp_nl,zp_wl = nodes_info[sentence_index]
+                candi_number = 0
+                res_list = []
+                np_x_list = []
+                np_x_pre_list = []
+                np_x_post_list = []
+    
+                for ci in range(max(0,sentence_index-MAX),sentence_index+1):
+                    
+                    candi_sentence_index = ci
+                    candi_nl,candi_wl = nodes_info[candi_sentence_index] 
+    
+                    for (candi_begin,candi_end) in candi[candi_sentence_index]:
+                        if ci == sentence_index and candi_end > zp_index:
+                            continue
+                        candidate = (candi_sentence_index,candi_begin,candi_end)
+    
+                        np_x = get_inputs(w2v,nodes_info,candi_sentence_index,candi_begin,candi_end,"np")
+                        np_x_pre,np_x_post = get_inputs(w2v,nodes_info,candi_sentence_index,candi_begin,candi_end,"npc")
+    
+                        res_result = 0
+                        if (sentence_index,zp_index,candi_sentence_index,candi_begin,candi_end) in anaphorics:
+                            res_result = 1
+    
+                        if len(np_x) == 0:
+                            continue
+                        
+                        np_x_list.append(np_x)
+                        np_x_pre_list.append(np_x_pre)
+                        np_x_post_list.append(np_x_post)
+
+                        res_list.append(res_result)
+                if len(np_x_list) == 0:
+                    continue
+                if sum(res_list) == 0:
+                    continue
+                mask = add_mask(np_x_list) 
+                np_x_list = numpy.array(np_x_list,dtype = numpy.float32)
+                mask = numpy.array(mask,dtype = numpy.float32)
+
+                mask_pre = add_mask(np_x_pre_list) 
+                np_x_pre_list = numpy.array(np_x_pre_list,dtype = numpy.float32)
+                mask_pre = numpy.array(mask_pre,dtype = numpy.float32)
+
+                mask_post = add_mask(np_x_post_list) 
+                np_x_post_list = numpy.array(np_x_post_list,dtype = numpy.float32)
+                mask_post = numpy.array(mask_post,dtype = numpy.float32)
+
+                training_instances.append((zp_x_pre,zp_x_post,np_x_list,np_x_pre_list,np_x_post_list,mask,mask_pre,mask_post,res_list))
+    
+        ####  Test process  ####
+    
+        path = args.test_data
+        paths = get_dir.get_all_file(path,[])
+        test_instances = []
+        anaphorics_result = []
+        
+        done_zp_num = 0
+    
+        for file_name in paths:
+            file_name = file_name.strip()
+            print >> sys.stderr, "Read File:%s <<-->> %d/%d"%(file_name,paths.index(file_name)+1,len(paths))
+    
+            zps,azps,candi,nodes_info = get_info_from_file(file_name,2)
+    
+            anaphorics = []
+            ana_zps = []
+            for (zp_sentence_index,zp_index,antecedents,is_azp) in azps:
+                if is_azp:
+                    for (candi_sentence_index,begin_word_index,end_word_index) in antecedents:
+                        anaphorics.append((zp_sentence_index,zp_index,candi_sentence_index,begin_word_index,end_word_index))
+                        ana_zps.append((zp_sentence_index,zp_index))
+    
+            for (sentence_index,zp_index) in zps:
+    
+                if not (sentence_index,zp_index) in ana_zps:
+                    continue
+    
+                done_zp_num += 1
+       
+                print >> sys.stderr,"------" 
+                this_sentence = get_sentence(sentence_index,zp_index,nodes_info)
+                print >> sys.stderr, "Sentence:",this_sentence
+    
+    
+                zp = (sentence_index,zp_index)
+                zp_x_pre,zp_x_post = get_inputs(w2v,nodes_info,sentence_index,zp_index,zp_index,"zp")
+    
+                zp_nl,zp_wl = nodes_info[sentence_index]
+                candi_number = 0
+                this_nodes_info = {} ## 为了节省存储空间
+                np_x_list = []
+                np_x_pre_list = []
+                np_x_post_list = []
+                res_list = []
+                zp_candi_list = [] ## 为了存zp和candidate
+    
+                for ci in range(max(0,sentence_index-MAX),sentence_index+1):
+                    
+                    candi_sentence_index = ci
+                    candi_nl,candi_wl = nodes_info[candi_sentence_index] 
+    
+                    for (candi_begin,candi_end) in candi[candi_sentence_index]:
+                        if ci == sentence_index and candi_end > zp_index:
+                            continue
+                        candidate = (candi_sentence_index,candi_begin,candi_end)
+    
+                        np_x = get_inputs(w2v,nodes_info,candi_sentence_index,candi_begin,candi_end,"np")
+                        np_x_pre,np_x_post = get_inputs(w2v,nodes_info,candi_sentence_index,candi_begin,candi_end,"npc")
+    
+                        res_result = 0
+                        if (sentence_index,zp_index,candi_sentence_index,candi_begin,candi_end) in anaphorics:
+                            res_result = 1
+    
+                        if len(np_x) == 0:
+                            continue
+                        
+                        np_x_list.append(np_x)
+                        np_x_pre_list.append(np_x_pre)
+                        np_x_post_list.append(np_x_post)
+
+                        res_list.append(res_result)
+                        zp_candi_list.append((zp,candidate))
+    
+                        this_nodes_info[candi_sentence_index] = nodes_info[candi_sentence_index]
+                        this_nodes_info[sentence_index] = nodes_info[sentence_index]
+    
+                        #this_zp_test_instence.append((zp_x_pre,zp_x_post,np_x,res_result,zp,candidate,this_nodes_info))
+                if len(np_x_list) == 0:
+                    continue
+    
+                mask = add_mask(np_x_list) 
+                np_x_list = numpy.array(np_x_list,dtype = numpy.float32)
+                mask = numpy.array(mask,dtype = numpy.float32)
+
+                mask_pre = add_mask(np_x_pre_list) 
+                np_x_pre_list = numpy.array(np_x_pre_list,dtype = numpy.float32)
+                mask_pre = numpy.array(mask_pre,dtype = numpy.float32)
+
+                mask_post = add_mask(np_x_post_list) 
+                np_x_post_list = numpy.array(np_x_post_list,dtype = numpy.float32)
+                mask_post = numpy.array(mask_post,dtype = numpy.float32)
+
+                anaphorics_result.append(anaphorics)
+                test_instances.append((zp_x_pre,zp_x_post,np_x_list,np_x_pre_list,np_x_post_list,mask,mask_pre,mask_post,res_list,zp_candi_list,this_nodes_info))
+
+        w2v = None # 释放空间
+        print >> sys.stderr,"Save file ./model/save_data"
+
+        save_f = file('./model/save_data', 'wb')
+        cPickle.dump(training_instances, save_f, protocol=cPickle.HIGHEST_PROTOCOL)
+        cPickle.dump(anaphorics_result, save_f, protocol=cPickle.HIGHEST_PROTOCOL)
+        cPickle.dump(test_instances, save_f, protocol=cPickle.HIGHEST_PROTOCOL)
+        save_f.close()
+               
+
+    ##### begin train and test #####
+    
+    ## Build DL Model ## 
+    print >> sys.stderr,"Building Model ..."
+    
+    if os.path.isfile("./model/lstm_init_model"):
+        read_f = file('./model/lstm_init_model', 'rb')
+        LSTM = cPickle.load(read_f)
+    else: 
+        LSTM = network.NetWork_new(50,args.embedding_dimention)
+        save_f = file('./model/lstm_init_model', 'wb') 
+        cPickle.dump(LSTM, save_f, protocol=cPickle.HIGHEST_PROTOCOL)
+        save_f.close()
+    
+    for echo in range(args.echos): 
+        print >> sys.stderr, "Echo for time",echo
+        start_time = timeit.default_timer()
+        cost = 0.0
+
+        random.shuffle(training_instances)
+
+        for zp_x_pre,zp_x_post,np_x_list,np_x_pre_list,np_x_post_list,mask,mask_pre,mask_post,res_list in training_instances:
+            #print np_x,mask,res_list
+
+            cost += LSTM.train_step(zp_x_pre,zp_x_post,np_x_list,np_x_pre_list,np_x_post_list,mask,mask_pre,mask_post,res_list,args.lr)[0]
+
+            #LSTM.show_para()
+            #print LSTM.get_dot(zp_x_pre,zp_x_post,np_x,mask)
+
+
+        end_time = timeit.default_timer()
+        print >> sys.stderr,"Cost",cost
+        print >> sys.stderr,"Parameters"
+        LSTM.show_para()
+        print >> sys.stderr, end_time - start_time, "seconds!"
+
+
+        '''
+        ### see how many hts ###
+        hits = 0
+        for zp_x_pre,zp_x_post,np_x,mask,res_list in training_instances:
+            outputs = list(LSTM.get_out(zp_x_pre,zp_x_post,np_x,mask)[0])
+            max_index = find_max(outputs)
+            if res_list[max_index] == 1:
+                hits += 1 
+        print >> sys.stderr, "Training Hits:",hits,"/",len(training_instances)
+        '''
+
+        #### Test for each echo ####
+        
+        #predict_result.append((sentence_index,zp_index,predict_candi_sentence_index,predict_candi_begin,predict_candi_end))
+        print >> sys.stderr, "Begin test" 
+        predict_result = []
+        numOfZP = 0
+        hits = 0
+        for (zp_x_pre,zp_x_post,np_x_list,np_x_pre_list,np_x_post_list,mask,mask_pre,mask_post,res_list,zp_candi_list,nodes_info) in test_instances:
+
+
+            numOfZP += 1
+            if len(np_x_list) == 0: ## no suitable candidates
+                predict_result.append((-1,-1,-1,-1,-1))
+            else:
+                zp,candidate = zp_candi_list[-1]
+                sentence_index,zp_index = zp
+                print >> sys.stderr,"------" 
+                this_sentence = get_sentence(sentence_index,zp_index,nodes_info)
+                print >> sys.stderr, "Sentence:",this_sentence
+
+                print >> sys.stderr, "Candidates:"
+
+                outputs = list(LSTM.get_out(zp_x_pre,zp_x_post,np_x_list,np_x_pre_list,np_x_post_list,mask,mask_pre,mask_post)[0])
                 max_index = find_max(outputs)
                 if res_list[max_index] == 1:
                     hits += 1
