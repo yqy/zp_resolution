@@ -1327,7 +1327,7 @@ def get_res_feature_NN(zp,candidate,wl_zp,wl_candi,HcPz,PcPz,HcP):
 
 
     ##### return #####
-    return ifl
+#    return ifl
 
     #candi_node
 
@@ -1365,18 +1365,22 @@ def get_res_feature_NN(zp,candidate,wl_zp,wl_candi,HcPz,PcPz,HcP):
     has_hcpz = "0"
     if hcpz in HcPz:
         has_hcpz = "1"
-    ifl.append("28:%s"%has_hcpz)
+    #ifl.append("28:%s"%has_hcpz)
 
-    pc_pz_same = "0"
+    pc_pz_same = 0
     if pc == pz:
         if candi_gram_role == "SBJ":
-            pc_pz_same = "1"
+            pc_pz_same = 1
         elif candi_gram_role == "OBJ":
-            pc_pz_same = "1"
+            pc_pz_same = 1
         else:
-            pz_pz_same = "2"
+            pc_pz_same = 2
 
-    ifl.append("zp_pz_same_%s:1"%pc_pz_same)
+    tmp_ones = [0]*3
+    tmp_ones[pc_pz_same] = 1
+    ifl += tmp_ones
+
+    #ifl.append("zp_pz_same_%s:1"%pc_pz_same)
 
     pcpz = "%s_%s_%s"%(pc,pz,gc)
     has_pcpz = "0"
@@ -1384,11 +1388,15 @@ def get_res_feature_NN(zp,candidate,wl_zp,wl_candi,HcPz,PcPz,HcP):
         has_pcpz = "1"
 
     hcp = "%s_%s"%(hc,punc)
-    has_hcp = "0"
+    has_hcp = 0
     if hcp in HcP:
-        has_hcp = "1"
-    ifl.append("hcp:%s"%has_hcp)
-
+        has_hcp = 1
+    
+    tmp_ones = [0]*2
+    tmp_ones[has_hcp] = 1
+    ifl += tmp_ones
+ 
+    ##### return #####
     return ifl
 
 
@@ -1782,6 +1790,7 @@ def write_feature_file_MaxEnt(filename,feature_list,sentence_index):
         #out = "%d%d\t%s\t%s\n"%(sentence_index,index,feature[0]," ".join(feature[1:]))  
         out = "%s\t%s\n"%(feature[0]," ".join(feature[1:]))  
         #out = "%d%d\t%s\t%s\n"%(sentence_index,index,feature[0]," ".join(feature[1:]).replace("-","").replace("_",""))  
+        #print out
         f.write(out)
         index += 1 
     f.close()
