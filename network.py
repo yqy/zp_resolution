@@ -262,6 +262,9 @@ class NetWork_feature():
         ##n_hidden: lstm for candi and zp 的隐层维度
         ##n_hidden_sequence: sequence lstm的隐层维度 因为要同zp的结合做dot，所以其维度要是n_hidden的2倍
         ##                   即 n_hidden_sequence = 2 * n_hidden
+
+        repre_active = tanh
+
         self.params = []
 
         self.zp_x_pre = T.matrix("zp_x_pre")
@@ -280,7 +283,7 @@ class NetWork_feature():
 
         self.zp_out = T.concatenate((zp_nn_pre.nn_out,zp_nn_post.nn_out))
 
-        self.ZP_layer = Layer(n_hidden*2,n_hidden*2,self.zp_out,ReLU) 
+        self.ZP_layer = Layer(n_hidden*2,n_hidden*2,self.zp_out,repre_active) 
 
         self.zp_out_output = self.ZP_layer.output
 
@@ -319,7 +322,7 @@ class NetWork_feature():
 
         self.np_out = T.concatenate((self.np_nn_x_output,self.np_nn_post_output,self.np_nn_pre_output),axis=1)
 
-        self.NP_layer = Layer(n_hidden*3,n_hidden*2,self.np_out,ReLU) 
+        self.NP_layer = Layer(n_hidden*3,n_hidden*2,self.np_out,repre_active) 
 
         self.np_out_output = self.NP_layer.output
 
@@ -330,7 +333,7 @@ class NetWork_feature():
         self.get_np_out = theano.function(inputs=[self.np_x,self.np_x_pre,self.np_x_post,self.mask,self.mask_pre,self.mask_post],outputs=[self.np_out_output])
 
         self.feature = T.matrix("feature")
-        self.feature_layer = Layer(feature_dimention,n_hidden,self.feature,ReLU) 
+        self.feature_layer = Layer(feature_dimention,n_hidden,self.feature,repre_active) 
 
         w_attention_zp,b_attention = init_weight(n_hidden*2,1,pre="attention_hidden",ones=False) 
         self.params += [w_attention_zp,b_attention]
@@ -356,7 +359,7 @@ class NetWork_feature():
 
         ## hop 1 ##                
         self.zp_hop_1_init = T.concatenate((zp_nn_pre.nn_out,zp_nn_post.nn_out,new_zp))
-        self.zp_hop_1 = ReLU(T.dot(self.zp_hop_1_init, self.w_hop_zp) + self.b_hop_zp)
+        self.zp_hop_1 = repre_active(T.dot(self.zp_hop_1_init, self.w_hop_zp) + self.b_hop_zp)
 
         self.calcu_attention_hop_1 = tanh(T.dot(self.np_out_output,w_attention_np) + T.dot(self.zp_hop_1,w_attention_zp) + T.dot(self.feature_layer.output,w_attention_feature) + b_attention)
         self.attention_hop_1 = softmax(T.transpose(self.calcu_attention_hop_1,axes=(1,0)))[0]
