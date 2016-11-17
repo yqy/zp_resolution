@@ -263,7 +263,7 @@ class NetWork_feature():
         ##n_hidden_sequence: sequence lstm的隐层维度 因为要同zp的结合做dot，所以其维度要是n_hidden的2倍
         ##                   即 n_hidden_sequence = 2 * n_hidden
 
-        repre_active = tanh
+        repre_active = ReLU
 
         self.params = []
 
