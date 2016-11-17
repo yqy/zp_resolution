@@ -303,20 +303,24 @@ class NetWork_feature():
         self.mask_pre = T.matrix("mask")
         self.mask_post = T.matrix("mask")
     
-        self.np_nn_x = RNN_batch(embedding_dimention,n_hidden,self.np_x,self.mask)
+        #self.np_nn_x = RNN_batch(embedding_dimention,n_hidden,self.np_x,self.mask)
+        self.np_nn_x = GRU_batch(embedding_dimention,n_hidden,self.np_x,self.mask)
         self.params += self.np_nn_x.params
         self.np_nn_pre = GRU_batch(embedding_dimention,n_hidden,self.np_x_pre,self.mask_pre)
         self.params += self.np_nn_pre.params
         self.np_nn_post = GRU_batch(embedding_dimention,n_hidden,self.np_x_post,self.mask_post)
         self.params += self.np_nn_post.params
 
+        self.np_nn_out = GRU_batch(embedding_dimention,n_hidden,self.np_x,self.mask)
+        self.params += self.np_nn_out.params
+
         #self.np_nn_out = LSTM_batch(embedding_dimention,n_hidden*2,self.np_x,self.mask)
         #self.np_nn_out = LSTM_batch(embedding_dimention,n_hidden*2,self.np_x_dropout,self.mask)
         #self.params += self.np_nn_out.params
 
 
-        #self.np_out = self.np_nn.nn_out
-        self.np_nn_x_output = (self.np_nn_x.all_hidden).mean(axis=1)
+        #self.np_nn_x_output = (self.np_nn_x.all_hidden).mean(axis=1)
+        self.np_nn_x_output = self.np_nn_x.nn_out
         self.np_nn_post_output = self.np_nn_post.nn_out
         self.np_nn_pre_output = self.np_nn_pre.nn_out
 
@@ -326,7 +330,8 @@ class NetWork_feature():
 
         self.np_out_output = self.NP_layer.output
 
-        self.np_x_head = T.transpose(self.np_x,axes=(1,0,2))[-1]
+        #self.np_x_head = T.transpose(self.np_x,axes=(1,0,2))[-1]
+        self.np_x_head = (self.np_nn_out.all_hidden).mean(axis=1)
 
         self.get_np_head = theano.function(inputs=[self.np_x],outputs=[self.np_x_head])
         self.get_np = theano.function(inputs=[self.np_x,self.np_x_pre,self.np_x_post,self.mask,self.mask_pre,self.mask_post],outputs=[self.np_out])
