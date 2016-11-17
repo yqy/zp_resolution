@@ -1884,7 +1884,7 @@ if args.type == "nn_feature":
         print >> sys.stderr,"Read model from ./model/lstm_init_model"
 
     else: 
-        LSTM = network.NetWork_feature(50,args.embedding_dimention,61)
+        LSTM = network.NetWork_feature(100,args.embedding_dimention,61)
         print >> sys.stderr,"save model ..."
         save_f = file('./model/lstm_init_model', 'wb') 
         cPickle.dump(LSTM, save_f, protocol=cPickle.HIGHEST_PROTOCOL)
