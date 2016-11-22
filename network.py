@@ -386,17 +386,25 @@ class NetWork_feature():
         self.zp_hop_3_init = T.concatenate((zp_nn_pre.nn_out,zp_nn_post.nn_out,new_zp_hop_3))
         self.zp_hop_3 = repre_active(T.dot(self.zp_hop_3_init, self.w_hop_zp) + self.b_hop_zp)
 
+
+        np_out_output_dropout = _dropout_from_layer(self.np_out_output)
+        zp_hop_3_dropout = _dropout_from_layer(self.zp_hop_3)
+        feature_out_dropout = _dropout_from_layer(self.feature_layer.output)
+
+        self.calcu_attention_hop_3_dropout = tanh(T.dot(np_out_output_dropout,w_attention_np) + T.dot(zp_hop_3_dropout,w_attention_zp) + T.dot(feature_out_dropout,w_attention_feature) + b_attention)
+        self.attention_hop_3_dropout = softmax(T.transpose(self.calcu_attention_hop_3_dropout,axes=(1,0)))[0]
+
         self.calcu_attention_hop_3 = tanh(T.dot(self.np_out_output,w_attention_np) + T.dot(self.zp_hop_3,w_attention_zp) + T.dot(self.feature_layer.output,w_attention_feature) + b_attention)
         self.attention_hop_3 = softmax(T.transpose(self.calcu_attention_hop_3,axes=(1,0)))[0]
 
 
-
-
         #self.out = self.attention_hop_1
         #self.out = self.attention_hop_3
-        self.out = self.attention
+        #self.out = self.attention
+        self.out4test = self.attention_hop_3
+        self.out = self.attention_hop_3_dropout
 
-        self.get_out = theano.function(inputs=[self.zp_x_pre,self.zp_x_post,self.np_x,self.np_x_pre,self.np_x_post,self.mask,self.mask_pre,self.mask_post,self.feature],outputs=[self.out],on_unused_input='warn')
+        self.get_out = theano.function(inputs=[self.zp_x_pre,self.zp_x_post,self.np_x,self.np_x_pre,self.np_x_post,self.mask,self.mask_pre,self.mask_post,self.feature],outputs=[self.out4test],on_unused_input='warn')
 
         
         l1_norm_squared = sum([(w**2).sum() for w in self.params])
