@@ -7,6 +7,7 @@ import math
 import timeit
 import numpy
 import random
+random.seed(100)
 
 from conf import *
 from buildTree import get_info_from_file
