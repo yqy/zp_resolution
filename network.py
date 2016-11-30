@@ -15,6 +15,7 @@ from theano.compile.nanguardmode import NanGuardMode
 
 
 import lasagne
+import init
 
 #theano.config.exception_verbosity="high"
 #theano.config.optimizer="fast_compile"
@@ -44,7 +45,7 @@ else:
     print >> sys.stderr,"Running with a CPU. If this is not desired,then modify the \n NetWork.py to set\nthe GPU flag to True."
     theano.config.floatX = 'float64'
 
-def init_weight(n_in,n_out,activation_fn=sigmoid,pre="",uni=True,ones=False):
+def init_weight(n_in,n_out,activation_fn=sigmoid,pre="",uni=True,ones=False,special=False):
     rng = np.random.RandomState(1234)
     if uni:
         W_values = np.asarray(rng.normal(size=(n_in, n_out), scale= .01, loc = .0), dtype = theano.config.floatX)
@@ -60,6 +61,9 @@ def init_weight(n_in,n_out,activation_fn=sigmoid,pre="",uni=True,ones=False):
         if activation_fn == theano.tensor.nnet.sigmoid:
             W_values *= 4
             W_values /= 6
+
+    if special:
+        W_values = init.orthogonal((n_in, n_out))
 
     b_values = np.zeros((n_out,), dtype=theano.config.floatX)
 
