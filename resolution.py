@@ -1980,9 +1980,24 @@ if args.type == "nn_feature":
                 print >> sys.stderr, "Done ZP #%d/%d"%(numOfZP,len(test_instances))
 
         print >> sys.stderr, "Test Hits:",hits,"/",len(test_instances)
+
+        '''
+        ### see how many hits in DEV ###
+        hits = 0
+        for zp_x_pre,zp_x_post,np_x_list,np_x_pre_list,np_x_post_list,mask,mask_pre,mask_post,feature_list,res_list in training_instances:
+            outputs = list(LSTM.get_out(zp_x_pre,zp_x_post,np_x_list,np_x_pre_list,np_x_post_list,mask,mask_pre,mask_post,feature_list)[0])
+            max_index = find_max(outputs)
+            if res_list[max_index] == 1:
+                hits += 1 
+        print >> sys.stderr, "Dev Hits:",hits,"/",len(training_instances)
+        '''
+
+
         print "Echo",echo 
         print "Test Hits:",hits,"/",len(test_instances)
         get_prf(anaphorics_result,predict_result)
+
+
         sys.stdout.flush()
     print >> sys.stderr,"Over for all"
 
