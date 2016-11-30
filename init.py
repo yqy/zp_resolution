@@ -3,6 +3,8 @@ from keras import backend as K
 import numpy as np
 import theano
 
+np.random.seed(1234)
+
 def get_fans(shape, dim_ordering='th'):
     if len(shape) == 2:
         fan_in = shape[0]
