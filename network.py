@@ -269,9 +269,6 @@ class NetWork_feature():
 
         self.zp_x_pre = T.matrix("zp_x_pre")
         self.zp_x_post = T.matrix("zp_x_post")
-        
-        #self.zp_x_pre_dropout = _dropout_from_layer(self.zp_x_pre)
-        #self.zp_x_post_dropout = _dropout_from_layer(self.zp_x_post)
 
         zp_nn_pre = GRU(embedding_dimention,n_hidden,self.zp_x_pre,prefix="zp_pre_")
         #zp_nn_pre = LSTM(embedding_dimention,n_hidden,self.zp_x_pre_dropout)
@@ -281,14 +278,16 @@ class NetWork_feature():
         #zp_nn_post = LSTM(embedding_dimention,n_hidden,self.zp_x_post_dropout)
         self.params += zp_nn_post.params
 
-        self.zp_out = T.concatenate((zp_nn_pre.nn_out,zp_nn_post.nn_out))
+        #self.zp_out = T.concatenate((zp_nn_pre.nn_out,zp_nn_post.nn_out))
+        self.zp_out_output = T.concatenate((zp_nn_pre.nn_out,zp_nn_post.nn_out))
 
-        self.ZP_layer = Layer(n_hidden*2,n_hidden*2,self.zp_out,repre_active,prefix="zp_part_") 
-        self.params += self.ZP_layer.params
+        #self.ZP_layer = Layer(n_hidden*2,n_hidden*2,self.zp_out,repre_active,prefix="zp_part_") 
+        #self.params += self.ZP_layer.params
+        #self.zp_out_output = self.ZP_layer.output
 
-        self.zp_out_output = self.ZP_layer.output
+        #self.zp_out_output = self.zp_out
         
-        self.get_zp_out = theano.function(inputs=[self.zp_x_pre,self.zp_x_post],outputs=[self.ZP_layer.output])
+        #self.get_zp_out = theano.function(inputs=[self.zp_x_pre,self.zp_x_post],outputs=[self.ZP_layer.output])
 
 
         ### get sequence output for NP ###
@@ -300,7 +299,8 @@ class NetWork_feature():
         self.mask_pre = T.matrix("mask")
         self.mask_post = T.matrix("mask")
     
-        self.np_nn_x = RNN_batch(embedding_dimention,n_hidden,self.np_x,self.mask,prefix="np_x_")
+        #self.np_nn_x = RNN_batch(embedding_dimention,n_hidden,self.np_x,self.mask,prefix="np_x_")
+        self.np_nn_x = GRU_batch(embedding_dimention,n_hidden,self.np_x,self.mask,prefix="np_x_")
         self.params += self.np_nn_x.params
         self.np_nn_pre = GRU_batch(embedding_dimention,n_hidden,self.np_x_pre,self.mask_pre,prefix="np_pre_")
         self.params += self.np_nn_pre.params
@@ -315,27 +315,27 @@ class NetWork_feature():
         #self.params += self.np_nn_out.params
 
 
-        self.np_nn_x_output = (self.np_nn_x.all_hidden).mean(axis=1)
+        #self.np_nn_x_output = (self.np_nn_x.all_hidden).mean(axis=1)
+        self.np_nn_x_output = (self.np_nn_x.all_hidden).sum(axis=1) / (T.sum(self.mask,axis=1)[:,None])
+
         #self.np_nn_x_output = self.np_nn_x.nn_out
         #self.np_nn_x_output = T.transpose(self.np_x,axes=(1,0,2))[-1]
         self.np_nn_post_output = self.np_nn_post.nn_out
         self.np_nn_pre_output = self.np_nn_pre.nn_out
 
-        self.np_out = T.concatenate((self.np_nn_x_output,self.np_nn_post_output,self.np_nn_pre_output),axis=1)
+        #self.np_out = T.concatenate((self.np_nn_x_output,self.np_nn_post_output,self.np_nn_pre_output),axis=1)
+        #self.NP_layer = Layer(n_hidden*3,n_hidden*2,self.np_out,repre_active,prefix="np_part_") 
+        #self.params += self.NP_layer.params
 
-        self.NP_layer = Layer(n_hidden*3,n_hidden*2,self.np_out,repre_active,prefix="np_part_") 
-        self.params += self.NP_layer.params
-
-        self.np_out_output = self.NP_layer.output
+        self.np_out_output = T.concatenate((self.np_nn_x_output,self.np_nn_post_output,self.np_nn_pre_output),axis=1)
+        #self.np_out_output = self.NP_layer.output
         
-        #self.np_nn_x_head = GRU_batch(embedding_dimention,n_hidden,self.np_x,self.mask,prefix="np_head_")
-        #self.params += self.np_nn_x_head.params
+        self.np_nn_x_head = GRU_batch(embedding_dimention,n_hidden,self.np_x,self.mask,prefix="np_head_")
+        self.params += self.np_nn_x_head.params
 
-        self.np_x_head = T.transpose(self.np_x,axes=(1,0,2))[-1]
-        #self.np_x_head = self.np_nn_x_head.nn_out
         #self.np_x_head = T.transpose(self.np_x,axes=(1,0,2))[-1]
-        #self.np_x_head = (self.np_nn_out.all_hidden).mean(axis=1)
-        #self.np_x_head = self.np_nn_out.nn_out
+        #self.np_x_head = self.np_nn_x_head.nn_out
+        self.np_x_head = self.np_nn_x_head.nn_out
 
         #self.get_np_head = theano.function(inputs=[self.np_x],outputs=[self.np_x_head])
         #self.get_np = theano.function(inputs=[self.np_x,self.np_x_pre,self.np_x_post,self.mask,self.mask_pre,self.mask_post],outputs=[self.np_out])
@@ -346,10 +346,11 @@ class NetWork_feature():
         self.feature_layer = Layer(feature_dimention,n_hidden,self.feature,tanh,prefix="feature_") 
         self.params += self.feature_layer.params
 
-        w_attention_zp,b_attention = init_weight(n_hidden*2,1,pre="attention_hidden_",ones=False) 
+        w_attention_zp,b_attention = init_weight(n_hidden*2,1,pre="attention_zp_",ones=False) 
         self.params += [w_attention_zp,b_attention]
 
-        w_attention_np,b_u = init_weight(n_hidden*2,1,pre="attention_zp_",ones=False) 
+        #w_attention_np,b_u = init_weight(n_hidden*3,2,pre="attention_zp_",ones=False) 
+        w_attention_np,b_u = init_weight(n_hidden*3,1,pre="attention_np_",ones=False) 
         self.params += [w_attention_np]
 
         w_attention_feature,b_u = init_weight(n_hidden,1,pre="attention_feature_",ones=False) 
@@ -364,63 +365,64 @@ class NetWork_feature():
         #self.get_new_zp = theano.function(inputs=[self.zp_x_pre,self.zp_x_post,self.np_x,self.np_x_pre,self.np_x_post,self.mask,self.mask_pre,self.mask_post,self.feature],outputs=[new_zp])
 
         #### *** HOP *** ####
-        #self.w_hop_zp,self.b_hop_zp = init_weight(n_hidden*2+embedding_dimention,n_hidden*2,pre="hop_")
-        #self.params += [self.w_hop_zp,self.b_hop_zp]
+        self.w_hop_zp,self.b_hop_zp = init_weight(n_hidden*2+embedding_dimention,n_hidden*2,pre="hop_")
+        self.params += [self.w_hop_zp,self.b_hop_zp]
+
+
+        w_attention_zp_hop,b_attention_hop = init_weight(n_hidden*2,1,pre="attention_zp_hop_",ones=False) 
+        self.params += [w_attention_zp_hop,b_attention_hop]
+
+        w_attention_np_hop,b_u = init_weight(n_hidden*3,1,pre="attention_np_hop_",ones=False) 
+        self.params += [w_attention_np_hop]
+
+        w_attention_feature_hop,b_u = init_weight(n_hidden,1,pre="attention_feature_hop_",ones=False) 
+        self.params += [w_attention_feature_hop]
 
         ## hop 1 ##                
         #self.zp_hop_1_init = T.concatenate((zp_nn_pre.nn_out,zp_nn_post.nn_out,new_zp))
+        #self.zp_hop_1_init = T.concatenate((self.zp_out_output,new_zp))
         self.zp_hop_1_init = T.concatenate((self.zp_out_output,new_zp))
         self.zp_hop_1 = repre_active(T.dot(self.zp_hop_1_init, self.w_hop_zp) + self.b_hop_zp)
 
-        self.calcu_attention_hop_1 = tanh(T.dot(self.np_out_output,w_attention_np) + T.dot(self.zp_hop_1,w_attention_zp) + T.dot(self.feature_layer.output,w_attention_feature) + b_attention)
+        self.calcu_attention_hop_1 = tanh(T.dot(self.np_out_output,w_attention_np_hop) + T.dot(self.zp_hop_1,w_attention_zp_hop) + T.dot(self.feature_layer.output,w_attention_feature_hop) + b_attention_hop)
         self.attention_hop_1 = softmax(T.transpose(self.calcu_attention_hop_1,axes=(1,0)))[0]
         #self.get_attention_hop_1 = theano.function(inputs=[self.zp_x_pre,self.zp_x_post,self.np_x,self.np_x_pre,self.np_x_post,self.mask,self.mask_pre,self.mask_post,self.feature],outputs=[self.attention_hop_1])
 
-
         ## hop 2 ##                
         new_zp_hop_2 = T.sum(self.attention_hop_1[:,None]*self.np_x_head,axis=0)
-        #self.zp_hop_2_init = T.concatenate((self.zp_out_output,new_zp_hop_2))
+        #self.zp_hop_2 = T.concatenate((self.zp_hop_1,new_zp_hop_2))
         self.zp_hop_2_init = T.concatenate((self.zp_hop_1,new_zp_hop_2))
         self.zp_hop_2 = repre_active(T.dot(self.zp_hop_2_init, self.w_hop_zp) + self.b_hop_zp)
 
-        self.calcu_attention_hop_2 = tanh(T.dot(self.np_out_output,w_attention_np) + T.dot(self.zp_hop_2,w_attention_zp) + T.dot(self.feature_layer.output,w_attention_feature) + b_attention)
+        self.calcu_attention_hop_2 = tanh(T.dot(self.np_out_output,w_attention_np_hop) + T.dot(self.zp_hop_2,w_attention_zp_hop) + T.dot(self.feature_layer.output,w_attention_feature_hop) + b_attention_hop)
         self.attention_hop_2 = softmax(T.transpose(self.calcu_attention_hop_2,axes=(1,0)))[0]
 
         ## hop 3 ##                
         new_zp_hop_3 = T.sum(self.attention_hop_2[:,None]*self.np_x_head,axis=0)
-        #self.zp_hop_3_init = T.concatenate((self.zp_out_output,new_zp_hop_3))
+        #self.zp_hop_3 = T.concatenate((self.zp_hop_2,new_zp_hop_3))
         self.zp_hop_3_init = T.concatenate((self.zp_hop_2,new_zp_hop_3))
         self.zp_hop_3 = repre_active(T.dot(self.zp_hop_3_init, self.w_hop_zp) + self.b_hop_zp)
 
-
-        np_out_output_dropout = _dropout_from_layer(self.np_out_output)
-        zp_hop_3_dropout = _dropout_from_layer(self.zp_hop_3)
-        #feature_out_dropout = _dropout_from_layer(self.feature_layer.output)
-
-        #self.calcu_attention_hop_3_dropout = tanh(T.dot(np_out_output_dropout,w_attention_np) + T.dot(zp_hop_3_dropout,w_attention_zp) + T.dot(feature_out_dropout,w_attention_feature) + b_attention)
-        self.calcu_attention_hop_3_dropout = tanh(T.dot(np_out_output_dropout,w_attention_np) + T.dot(zp_hop_3_dropout,w_attention_zp) + T.dot(self.feature_layer.output,w_attention_feature) + b_attention)
-        self.attention_hop_3_dropout = softmax(T.transpose(self.calcu_attention_hop_3_dropout,axes=(1,0)))[0]
-
-        self.calcu_attention_hop_3 = tanh(T.dot(self.np_out_output,w_attention_np) + T.dot(self.zp_hop_3,w_attention_zp) + T.dot(self.feature_layer.output,w_attention_feature) + b_attention)
+        self.calcu_attention_hop_3 = tanh(T.dot(self.np_out_output,w_attention_np_hop) + T.dot(self.zp_hop_3,w_attention_zp_hop) + T.dot(self.feature_layer.output,w_attention_feature_hop) + b_attention_hop)
         self.attention_hop_3 = softmax(T.transpose(self.calcu_attention_hop_3,axes=(1,0)))[0]
+
 
         ## hop 4 ##                
         new_zp_hop_4 = T.sum(self.attention_hop_3[:,None]*self.np_x_head,axis=0)
+        #self.zp_hop_3 = T.concatenate((self.zp_hop_2,new_zp_hop_3))
         self.zp_hop_4_init = T.concatenate((self.zp_hop_3,new_zp_hop_4))
         self.zp_hop_4 = repre_active(T.dot(self.zp_hop_4_init, self.w_hop_zp) + self.b_hop_zp)
 
-        self.calcu_attention_hop_4 = tanh(T.dot(self.np_out_output,w_attention_np) + T.dot(self.zp_hop_4,w_attention_zp) + T.dot(self.feature_layer.output,w_attention_feature) + b_attention)
+        self.calcu_attention_hop_4 = tanh(T.dot(self.np_out_output,w_attention_np_hop) + T.dot(self.zp_hop_4,w_attention_zp_hop) + T.dot(self.feature_layer.output,w_attention_feature_hop) + b_attention_hop)
         self.attention_hop_4 = softmax(T.transpose(self.calcu_attention_hop_4,axes=(1,0)))[0]
 
         ## hop 5 ##                
         new_zp_hop_5 = T.sum(self.attention_hop_4[:,None]*self.np_x_head,axis=0)
-        #self.zp_hop_2_init = T.concatenate((self.zp_out_output,new_zp_hop_2))
         self.zp_hop_5_init = T.concatenate((self.zp_hop_4,new_zp_hop_5))
         self.zp_hop_5 = repre_active(T.dot(self.zp_hop_5_init, self.w_hop_zp) + self.b_hop_zp)
 
-        self.calcu_attention_hop_5 = tanh(T.dot(self.np_out_output,w_attention_np) + T.dot(self.zp_hop_5,w_attention_zp) + T.dot(self.feature_layer.output,w_attention_feature) + b_attention)
-        self.attention_hop_5 = softmax(T.transpose(self.calcu_attention_hop_5,axes=(1,0)))[0]
-
+        self.calcu_attention_hop_5 = tanh(T.dot(self.np_out_output,w_attention_np_hop) + T.dot(self.zp_hop_5,w_attention_zp_hop) + T.dot(self.feature_layer.output,w_attention_feature_hop) + b_attention_hop)
+        self.attention_hop_5 = softmax(T.transpose(self.calcu_attention_hop_4,axes=(1,0)))[0]
 
         self.out = self.attention_hop_5
         #self.out = self.attention_hop_3
