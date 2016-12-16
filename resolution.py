@@ -2311,8 +2311,8 @@ if args.type == "nn_feature_predict":
 
                         if nn_predict >= st_scores[hopi]: 
                             predict_items[hopi] = (zp,candidate)
-                            st_score[hopi] = nn_predict
-                            predict_str_log[hopi] = "%d\t%s\tPredict:%f"%(numOfCandi,candi_str,nn_predict)
+                            st_scores[hopi] = nn_predict
+                            predict_str_logs[hopi] = "%d\t%s\tPredict:%f"%(numOfCandi,candi_str,nn_predict)
 
                     print >> sys.stderr,"%d\t%s\tPredict:"%(numOfCandi,candi_str," ".join(hop4log))
                     numOfCandi += 1
@@ -2326,7 +2326,7 @@ if args.type == "nn_feature_predict":
                 print >> sys.stderr, "Results:"
                 
                 for hopi in range(hop_num):
-                    print >> sys.stderr, "Predict -- hop %d -- %s"%(hopi,predict_str_log[hopi])
+                    print >> sys.stderr, "Predict -- hop %d -- %s"%(hopi,predict_str_logs[hopi])
                 print >> sys.stderr, "Done ZP #%d/%d"%(numOfZP,len(test_instances))
 
         for hopi in range(hop_num):
