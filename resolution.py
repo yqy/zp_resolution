@@ -2244,27 +2244,33 @@ if args.type == "nn_feature_predict":
     
     if os.path.isfile("./model/model_hops"):
         read_f = file('./model/model_hops', 'rb')
-        LSTM0 = cPickle.load(read_f)
-        LSTM1 = cPickle.load(read_f)
-        LSTM2 = cPickle.load(read_f)
-        LSTM3 = cPickle.load(read_f)
-        LSTM4 = cPickle.load(read_f)
-        LSTM5 = cPickle.load(read_f)
-        LSTM6 = cPickle.load(read_f)
+
+        LSTM = []
+
+        LSTM.append(cPickle.load(read_f))
+        LSTM.append(cPickle.load(read_f))
+        LSTM.append(cPickle.load(read_f))
+        LSTM.append(cPickle.load(read_f))
+        LSTM.append(cPickle.load(read_f))
+        LSTM.append(cPickle.load(read_f))
+
+        hop_num = len(LSTM)
+
+        #LSTM6 = cPickle.load(read_f)
         print >> sys.stderr,"Read model from ./model/lstm_init_model"
-        '''
         #### Test for each echo ####
         
-        #predict_result.append((sentence_index,zp_index,predict_candi_sentence_index,predict_candi_begin,predict_candi_end))
         print >> sys.stderr, "Begin test" 
-        predict_result = []
+        predict_result = [[]]*hop_num
         numOfZP = 0
-        hits = 0
+        hits = [0]*hop_num 
+
         for (zp_x_pre,zp_x_post,np_x_list,np_x_pre_list,np_x_post_list,mask,mask_pre,mask_post,feature_list,res_list,zp_candi_list,nodes_info) in test_instances:
 
             numOfZP += 1
             if len(np_x_list) == 0: ## no suitable candidates
-                predict_result.append((-1,-1,-1,-1,-1))
+                for i in range(hop_num):
+                    predict_result[i].append((-1,-1,-1,-1,-1))
             else:
                 zp,candidate = zp_candi_list[-1]
                 sentence_index,zp_index = zp
@@ -2274,99 +2280,65 @@ if args.type == "nn_feature_predict":
 
                 print >> sys.stderr, "Candidates:"
 
-                outputs = list(LSTM.get_out(zp_x_pre,zp_x_post,np_x_list,np_x_pre_list,np_x_post_list,mask,mask_pre,mask_post,feature_list)[0])
-                max_index = find_max(outputs)
-                if res_list[max_index] == 1:
-                    hits += 1
+                outputs = []
+                for i in range(hop_num):
+                    outputs.append(list(LSTM[i].get_out(zp_x_pre,zp_x_post,np_x_list,np_x_pre_list,np_x_post_list,mask,mask_pre,mask_post,feature_list)[0]))
 
-                st_score = 0.0
-                predict_items = None
+                for i in range(hop_num):
+                    max_index = find_max(outputs[i])
+                    if res_list[max_index] == 1:
+                        hits[i] += 1
+
+                st_scores = [0.0]*hop_num
+                predict_items = [None]*hop_num
+                predict_str_logs = [None]*hop_num
                 numOfCandi = 0
-                predict_str_log = None
+
                 for i in range(len(zp_candi_list)): 
                     zp,candidate = zp_candi_list[i]
-                    nn_predict = outputs[i]
                     res_result = res_list[i]
+                    
+                    nn_predicts = []
+                    for hopi in range(hop_num):
+                        nn_predicts.append(outputs[hopi][i])
                 
                     candi_sentence_index,candi_begin,candi_end = candidate
                     candi_str = "\t".join(get_candi_info(candi_sentence_index,nodes_info,candi_begin,candi_end,res_result))
-                    if nn_predict >= st_score: 
-                        predict_items = (zp,candidate)
-                        st_score = nn_predict
-                        predict_str_log = "%d\t%s\tPredict:%f"%(numOfCandi,candi_str,nn_predict)
-                    print >> sys.stderr,"%d\t%s\tPredict:%f"%(numOfCandi,candi_str,nn_predict)
+                    hop4log = []
+                    for hopi in range(hop_num):
+                        nn_predict = nn_predicts[hopi]
+                        hop4log.append("hop%d-%f"%(hopi,nn_predict))
+
+                        if nn_predict >= st_scores[hopi]: 
+                            predict_items[hopi] = (zp,candidate)
+                            st_score[hopi] = nn_predict
+                            predict_str_log[hopi] = "%d\t%s\tPredict:%f"%(numOfCandi,candi_str,nn_predict)
+
+                    print >> sys.stderr,"%d\t%s\tPredict:"%(numOfCandi,candi_str," ".join(hop4log))
                     numOfCandi += 1
 
-                predict_zp,predict_candidate = predict_items
-                sentence_index,zp_index = predict_zp 
-                predict_candi_sentence_index,predict_candi_begin,predict_candi_end = predict_candidate
+                for hopi in range(hop_num):
+                    predict_zp,predict_candidate = predict_items[hopi]
+                    sentence_index,zp_index = predict_zp 
+                    predict_candi_sentence_index,predict_candi_begin,predict_candi_end = predict_candidate
 
-                predict_result.append((sentence_index,zp_index,predict_candi_sentence_index,predict_candi_begin,predict_candi_end))
+                    predict_result[i].append((sentence_index,zp_index,predict_candi_sentence_index,predict_candi_begin,predict_candi_end))
                 print >> sys.stderr, "Results:"
-                print >> sys.stderr, "Predict -- %s"%predict_str_log
+                
+                for hopi in range(hop_num):
+                    print >> sys.stderr, "Predict -- hop %d -- %s"%(hopi,predict_str_log[hopi])
                 print >> sys.stderr, "Done ZP #%d/%d"%(numOfZP,len(test_instances))
 
-        print >> sys.stderr, "Test Hits:",hits,"/",len(test_instances)
+        for hopi in range(hop_num):
+            print >> sys.stderr, "Test Hits for hop %d:"%hopi,hits[hopi],"/",len(test_instances)
 
         print "Echo",echo 
-        print "Test Hits:",hits,"/",len(test_instances)
-        get_prf(anaphorics_result,predict_result)
-        '''
-        hits = 0
-        for (zp_x_pre,zp_x_post,np_x_list,np_x_pre_list,np_x_post_list,mask,mask_pre,mask_post,feature_list,res_list,zp_candi_list,nodes_info) in test_instances:
-            outputs = list(LSTM0.get_out(zp_x_pre,zp_x_post,np_x_list,np_x_pre_list,np_x_post_list,mask,mask_pre,mask_post,feature_list)[0])
-            max_index = find_max(outputs)
-            if res_list[max_index] == 1:
-                hits += 1 
-        print "hop0 Hits:",hits,"/",len(test_instances)
+        for hopi in range(hop_num):
+            print "Test Hits for hop %d:"%hopi,hits[hopi],"/",len(test_instances)
 
-        hits = 0
-        for (zp_x_pre,zp_x_post,np_x_list,np_x_pre_list,np_x_post_list,mask,mask_pre,mask_post,feature_list,res_list,zp_candi_list,nodes_info) in test_instances:
-            outputs = list(LSTM1.get_out(zp_x_pre,zp_x_post,np_x_list,np_x_pre_list,np_x_post_list,mask,mask_pre,mask_post,feature_list)[0])
-            max_index = find_max(outputs)
-            if res_list[max_index] == 1:
-                hits += 1 
-        print "hop1 Hits:",hits,"/",len(test_instances)
-
-        hits = 0
-        for (zp_x_pre,zp_x_post,np_x_list,np_x_pre_list,np_x_post_list,mask,mask_pre,mask_post,feature_list,res_list,zp_candi_list,nodes_info) in test_instances:
-            outputs = list(LSTM2.get_out(zp_x_pre,zp_x_post,np_x_list,np_x_pre_list,np_x_post_list,mask,mask_pre,mask_post,feature_list)[0])
-            max_index = find_max(outputs)
-            if res_list[max_index] == 1:
-                hits += 1 
-        print "hop2 Hits:",hits,"/",len(test_instances)
-
-        hits = 0
-        for (zp_x_pre,zp_x_post,np_x_list,np_x_pre_list,np_x_post_list,mask,mask_pre,mask_post,feature_list,res_list,zp_candi_list,nodes_info) in test_instances:
-            outputs = list(LSTM3.get_out(zp_x_pre,zp_x_post,np_x_list,np_x_pre_list,np_x_post_list,mask,mask_pre,mask_post,feature_list)[0])
-            max_index = find_max(outputs)
-            if res_list[max_index] == 1:
-                hits += 1 
-        print "hop3 Hits:",hits,"/",len(test_instances)
-
-        hits = 0
-        for (zp_x_pre,zp_x_post,np_x_list,np_x_pre_list,np_x_post_list,mask,mask_pre,mask_post,feature_list,res_list,zp_candi_list,nodes_info) in test_instances:
-            outputs = list(LSTM4.get_out(zp_x_pre,zp_x_post,np_x_list,np_x_pre_list,np_x_post_list,mask,mask_pre,mask_post,feature_list)[0])
-            max_index = find_max(outputs)
-            if res_list[max_index] == 1:
-                hits += 1 
-        print "hop4 Hits:",hits,"/",len(test_instances)
-
-        hits = 0
-        for (zp_x_pre,zp_x_post,np_x_list,np_x_pre_list,np_x_post_list,mask,mask_pre,mask_post,feature_list,res_list,zp_candi_list,nodes_info) in test_instances:
-            outputs = list(LSTM5.get_out(zp_x_pre,zp_x_post,np_x_list,np_x_pre_list,np_x_post_list,mask,mask_pre,mask_post,feature_list)[0])
-            max_index = find_max(outputs)
-            if res_list[max_index] == 1:
-                hits += 1 
-        print "hop5 Hits:",hits,"/",len(test_instances)
-
-        hits = 0
-        for (zp_x_pre,zp_x_post,np_x_list,np_x_pre_list,np_x_post_list,mask,mask_pre,mask_post,feature_list,res_list,zp_candi_list,nodes_info) in test_instances:
-            outputs = list(LSTM6.get_out(zp_x_pre,zp_x_post,np_x_list,np_x_pre_list,np_x_post_list,mask,mask_pre,mask_post,feature_list)[0])
-            max_index = find_max(outputs)
-            if res_list[max_index] == 1:
-                hits += 1 
-        print  "hop6 Hits:",hits,"/",len(test_instances)
+        for hopi in range(hop_num):
+            print "Hop",hopi
+            get_prf(anaphorics_result,predict_result[hopi])
 
     print >> sys.stderr,"Over for all"
 
