@@ -1893,6 +1893,13 @@ if args.type == "nn_feature":
     
     for echo in range(args.echos): 
         print >> sys.stderr, "Echo for time",echo
+
+        if echo == 4:
+            save_f = file('./model/best_model', 'wb') 
+            cPickle.dump(LSTM, save_f, protocol=cPickle.HIGHEST_PROTOCOL)
+            save_f.close()
+    
+
         start_time = timeit.default_timer()
         cost = 0.0
 
