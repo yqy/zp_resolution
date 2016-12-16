@@ -2322,7 +2322,7 @@ if args.type == "nn_feature_predict":
                     sentence_index,zp_index = predict_zp 
                     predict_candi_sentence_index,predict_candi_begin,predict_candi_end = predict_candidate
 
-                    predict_result[i].append((sentence_index,zp_index,predict_candi_sentence_index,predict_candi_begin,predict_candi_end))
+                    predict_result[hopi].append((sentence_index,zp_index,predict_candi_sentence_index,predict_candi_begin,predict_candi_end))
                 print >> sys.stderr, "Results:"
                 
                 for hopi in range(hop_num):
