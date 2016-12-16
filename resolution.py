@@ -2019,6 +2019,282 @@ if args.type == "nn_feature_predict":
         HcP.append(line)
     f.close()
 
+    if os.path.isfile("./model/save_data_auto"):
+        print >> sys.stderr,"Read from file ./model/save_data_auto"
+        read_f = file('./model/save_data_auto', 'rb')        
+        anaphorics_result = cPickle.load(read_f)
+        test_instances = cPickle.load(read_f)
+        read_f.close()
+    else:
+        print >> sys.stderr, "Read W2V"
+        w2v = word2vec.Word2Vec(args.embedding)
+    
+        path = args.data
+        paths = get_dir.get_all_file(path,[])
+        MAX = 2
+ 
+        ####  Test process  ####
+    
+        path = args.test_data
+        paths = get_dir.get_all_file(path,[])
+        test_instances = []
+        anaphorics_result = []
+        
+        done_zp_num = 0
+    
+        for file_name in paths:
+            file_name = file_name.strip()
+            print >> sys.stderr, "Read File:%s <<-->> %d/%d"%(file_name,paths.index(file_name)+1,len(paths))
+    
+            zps,azps,candi,nodes_info = get_info_from_file(file_name,2)
+    
+            anaphorics = []
+            ana_zps = []
+            for (zp_sentence_index,zp_index,antecedents,is_azp) in azps:
+                if is_azp:
+                    for (candi_sentence_index,begin_word_index,end_word_index) in antecedents:
+                        anaphorics.append((zp_sentence_index,zp_index,candi_sentence_index,begin_word_index,end_word_index))
+                        ana_zps.append((zp_sentence_index,zp_index))
+    
+            for (sentence_index,zp_index) in zps:
+    
+                #if not (sentence_index,zp_index) in ana_zps:
+                #    continue
+    
+                done_zp_num += 1
+
+
+
+       
+                print >> sys.stderr,"------" 
+                this_sentence = get_sentence(sentence_index,zp_index,nodes_info)
+                print >> sys.stderr, "Sentence:",this_sentence
+    
+    
+                zp = (sentence_index,zp_index)
+                zp_x_pre,zp_x_post = get_inputs(w2v,nodes_info,sentence_index,zp_index,zp_index,"zp")
+    
+                zp_nl,zp_wl = nodes_info[sentence_index]
+                candi_number = 0
+                this_nodes_info = {} ## 为了节省存储空间
+                np_x_list = []
+                np_x_pre_list = []
+                np_x_post_list = []
+                res_list = []
+                zp_candi_list = [] ## 为了存zp和candidate
+                feature_list = []
+
+                fl = [] 
+                ifl = [] 
+                zp_nl,zp_wl = nodes_info[sentence_index]
+                ifl = get_feature.get_azp_feature_zp(zp_wl[zp_index],zp_wl,[])
+                azp_result = "NOT" 
+                if (sentence_index,zp_index) in ana_zps:
+                    azp_result = "IS" 
+                ifl = ["0"] + ifl  
+                fl.append(ifl)
+                 
+                get_feature.write_feature_file_MaxEnt(FeatureFile+"azp",fl,sentence_index)
+                cmd = "./start_maxEnt.sh azp > ./tmp_data/t"
+                os.system(cmd)
+                result_file = "./tmp_data/result.azp"
+                class_result,score = get_feature.read_result_Max_with_index(result_file,float(args.azp_t),args.res_pos)
+
+                azp_score = score[0] ##每次只有一个实例
+                if azp_score < float(args.azp_t):
+                    candi_similarity_matrix = [] 
+                    test_instances.append((zp_x_pre,zp_x_post,np_x_list,np_x_pre_list,np_x_post_list,[],[],[],feature_list,res_list,zp_candi_list,this_nodes_info))
+                    if azp_result == "IS":
+                        anaphorics_result.append(anaphorics)
+                    else:
+                        anaphorics_result.append(None)
+                    continue
+
+
+                for ci in range(max(0,sentence_index-MAX),sentence_index+1):
+                    
+                    candi_sentence_index = ci
+                    candi_nl,candi_wl = nodes_info[candi_sentence_index] 
+    
+                    for (candi_begin,candi_end) in candi[candi_sentence_index]:
+                        if ci == sentence_index and candi_end > zp_index:
+                            continue
+                        candidate = (candi_sentence_index,candi_begin,candi_end)
+    
+                        np_x = get_inputs(w2v,nodes_info,candi_sentence_index,candi_begin,candi_end,"np")
+                        np_x_pre,np_x_post = get_inputs(w2v,nodes_info,candi_sentence_index,candi_begin,candi_end,"npc")
+    
+                        res_result = 0
+                        if (sentence_index,zp_index,candi_sentence_index,candi_begin,candi_end) in anaphorics:
+                            res_result = 1
+    
+                        if len(np_x) == 0:
+                            continue
+
+
+                        ifl = get_feature.get_res_feature_NN(zp,candidate,zp_wl,candi_wl,[],[],HcP)
+                        
+                        np_x_list.append(np_x)
+                        np_x_pre_list.append(np_x_pre)
+                        np_x_post_list.append(np_x_post)
+                        feature_list.append(ifl)
+
+                        res_list.append(res_result)
+                        zp_candi_list.append((zp,candidate))
+    
+                        this_nodes_info[candi_sentence_index] = nodes_info[candi_sentence_index]
+                        this_nodes_info[sentence_index] = nodes_info[sentence_index]
+    
+                        #this_zp_test_instence.append((zp_x_pre,zp_x_post,np_x,res_result,zp,candidate,this_nodes_info))
+                if len(np_x_list) == 0:
+                    continue
+    
+                mask = add_mask(np_x_list) 
+                np_x_list = numpy.array(np_x_list,dtype = numpy.float32)
+                mask = numpy.array(mask,dtype = numpy.float32)
+
+                mask_pre = add_mask(np_x_pre_list) 
+                np_x_pre_list = numpy.array(np_x_pre_list,dtype = numpy.float32)
+                mask_pre = numpy.array(mask_pre,dtype = numpy.float32)
+
+                mask_post = add_mask(np_x_post_list) 
+                np_x_post_list = numpy.array(np_x_post_list,dtype = numpy.float32)
+                mask_post = numpy.array(mask_post,dtype = numpy.float32)
+
+                feature_list = numpy.array(feature_list,dtype = numpy.float32)
+
+                #anaphorics_result.append(anaphorics)
+                if azp_result == "IS":
+                    anaphorics_result.append(anaphorics)
+                else:
+                    anaphorics_result.append(None)
+
+                test_instances.append((zp_x_pre,zp_x_post,np_x_list,np_x_pre_list,np_x_post_list,mask,mask_pre,mask_post,feature_list,res_list,zp_candi_list,this_nodes_info))
+
+        w2v = None # 释放空间
+        print >> sys.stderr,"Save file ./model/save_data_auto"
+
+        save_f = file('./model/save_data_auto', 'wb')
+        cPickle.dump(anaphorics_result, save_f, protocol=cPickle.HIGHEST_PROTOCOL)
+        cPickle.dump(test_instances, save_f, protocol=cPickle.HIGHEST_PROTOCOL)
+        save_f.close()
+               
+
+    ##### begin test #####
+    
+    ## Build DL Model ## 
+    print >> sys.stderr,"Building Model ..."
+    
+    if os.path.isfile("./model/model_hops"):
+        read_f = file('./model/model_hops', 'rb')
+
+        LSTM = []
+
+        LSTM.append(cPickle.load(read_f))
+        LSTM.append(cPickle.load(read_f))
+        LSTM.append(cPickle.load(read_f))
+        LSTM.append(cPickle.load(read_f))
+        LSTM.append(cPickle.load(read_f))
+        LSTM.append(cPickle.load(read_f))
+
+        hop_num = len(LSTM)
+
+        #LSTM6 = cPickle.load(read_f)
+        print >> sys.stderr,"Read model from ./model/lstm_init_model"
+        #### Test for each echo ####
+        
+        print >> sys.stderr, "Begin test" 
+        predict_result = [[]]*hop_num
+        numOfZP = 0
+        hits = [0]*hop_num 
+
+        for (zp_x_pre,zp_x_post,np_x_list,np_x_pre_list,np_x_post_list,mask,mask_pre,mask_post,feature_list,res_list,zp_candi_list,nodes_info) in test_instances:
+
+            numOfZP += 1
+            if len(np_x_list) == 0: ## no suitable candidates
+                for i in range(hop_num):
+                    predict_result[i].append((-1,-1,-1,-1,-1))
+            else:
+                zp,candidate = zp_candi_list[-1]
+                sentence_index,zp_index = zp
+                print >> sys.stderr,"------" 
+                this_sentence = get_sentence(sentence_index,zp_index,nodes_info)
+                print >> sys.stderr, "Sentence:",this_sentence
+
+                print >> sys.stderr, "Candidates:"
+
+                outputs = []
+                for i in range(hop_num):
+                    outputs.append(list(LSTM[i].get_out(zp_x_pre,zp_x_post,np_x_list,np_x_pre_list,np_x_post_list,mask,mask_pre,mask_post,feature_list)[0]))
+
+                for i in range(hop_num):
+                    max_index = find_max(outputs[i])
+                    if res_list[max_index] == 1:
+                        hits[i] += 1
+
+                st_scores = [0.0]*hop_num
+                predict_items = [None]*hop_num
+                predict_str_logs = [None]*hop_num
+                numOfCandi = 0
+
+                for i in range(len(zp_candi_list)): 
+                    zp,candidate = zp_candi_list[i]
+                    res_result = res_list[i]
+                    
+                    nn_predicts = []
+                    for hopi in range(hop_num):
+                        nn_predicts.append(outputs[hopi][i])
+                
+                    candi_sentence_index,candi_begin,candi_end = candidate
+                    candi_str = "\t".join(get_candi_info(candi_sentence_index,nodes_info,candi_begin,candi_end,res_result))
+                    hop4log = []
+                    for hopi in range(hop_num):
+                        nn_predict = nn_predicts[hopi]
+                        hop4log.append("hop%d-%f"%(hopi,nn_predict))
+
+                        if nn_predict >= st_scores[hopi]: 
+                            predict_items[hopi] = (zp,candidate)
+                            st_scores[hopi] = nn_predict
+                            predict_str_logs[hopi] = "%d\t%s\tPredict:%f"%(numOfCandi,candi_str,nn_predict)
+
+                    print >> sys.stderr,"%d\t%s\tPredict:%s"%(numOfCandi,candi_str," ".join(hop4log))
+                    numOfCandi += 1
+
+                for hopi in range(hop_num):
+                    predict_zp,predict_candidate = predict_items[hopi]
+                    sentence_index,zp_index = predict_zp 
+                    predict_candi_sentence_index,predict_candi_begin,predict_candi_end = predict_candidate
+
+                    predict_result[hopi].append((sentence_index,zp_index,predict_candi_sentence_index,predict_candi_begin,predict_candi_end))
+                print >> sys.stderr, "Results:"
+                
+                for hopi in range(hop_num):
+                    print >> sys.stderr, "Predict -- hop %d -- %s"%(hopi,predict_str_logs[hopi])
+                print >> sys.stderr, "Done ZP #%d/%d"%(numOfZP,len(test_instances))
+
+        for hopi in range(hop_num):
+            print >> sys.stderr, "Test Hits for hop %d:"%hopi,hits[hopi],"/",len(test_instances)
+
+        for hopi in range(hop_num):
+            print "Test Hits for hop %d:"%hopi,hits[hopi],"/",len(test_instances)
+
+        for hopi in range(hop_num):
+            print "Hop",hopi
+            get_prf(anaphorics_result,predict_result[hopi])
+
+    print >> sys.stderr,"Over for all"
+
+if args.type == "nn_feature_predict_AZP":
+
+    f = open("./HcP")
+    HcP = [] 
+    while True:
+        line = f.readline()
+        if not line:break
+        line = line.strip()
+        HcP.append(line)
+    f.close()
+
     if os.path.isfile("./model/save_data"):
         print >> sys.stderr,"Read from file ./model/save_data"
         read_f = file('./model/save_data', 'rb')        
@@ -2340,4 +2616,6 @@ if args.type == "nn_feature_predict":
             get_prf(anaphorics_result,predict_result[hopi])
 
     print >> sys.stderr,"Over for all"
+
+
 
