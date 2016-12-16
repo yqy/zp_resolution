@@ -2093,7 +2093,8 @@ if args.type == "nn_feature_predict_AZP":
                     azp_result = "IS" 
                 ifl = ["0"] + ifl  
                 fl.append(ifl)
-                 
+                
+                FeatureFile = "./tmp_data/feature." 
                 get_feature.write_feature_file_MaxEnt(FeatureFile+"azp",fl,sentence_index)
                 cmd = "./start_maxEnt.sh azp > ./tmp_data/t"
                 os.system(cmd)
