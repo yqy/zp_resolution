@@ -2314,7 +2314,7 @@ if args.type == "nn_feature_predict":
                             st_scores[hopi] = nn_predict
                             predict_str_logs[hopi] = "%d\t%s\tPredict:%f"%(numOfCandi,candi_str,nn_predict)
 
-                    print >> sys.stderr,"%d\t%s\tPredict:"%(numOfCandi,candi_str," ".join(hop4log))
+                    print >> sys.stderr,"%d\t%s\tPredict:%s"%(numOfCandi,candi_str," ".join(hop4log))
                     numOfCandi += 1
 
                 for hopi in range(hop_num):
