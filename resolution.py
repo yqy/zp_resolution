@@ -2332,7 +2332,6 @@ if args.type == "nn_feature_predict":
         for hopi in range(hop_num):
             print >> sys.stderr, "Test Hits for hop %d:"%hopi,hits[hopi],"/",len(test_instances)
 
-        print "Echo",echo 
         for hopi in range(hop_num):
             print "Test Hits for hop %d:"%hopi,hits[hopi],"/",len(test_instances)
 
