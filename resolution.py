@@ -2008,7 +2008,7 @@ if args.type == "nn_feature":
         sys.stdout.flush()
     print >> sys.stderr,"Over for all"
 
-if args.type == "nn_feature_predict":
+if args.type == "nn_feature_predict_AZP":
 
     f = open("./HcP")
     HcP = [] 
@@ -2204,7 +2204,11 @@ if args.type == "nn_feature_predict":
         #### Test for each echo ####
         
         print >> sys.stderr, "Begin test" 
-        predict_result = [[]]*hop_num
+
+        predict_result = []
+        for hopi in range(hop_num):
+            predict_result.append([])
+
         numOfZP = 0
         hits = [0]*hop_num 
 
@@ -2284,7 +2288,7 @@ if args.type == "nn_feature_predict":
 
     print >> sys.stderr,"Over for all"
 
-if args.type == "nn_feature_predict_AZP":
+if args.type == "nn_feature_predict":
 
     f = open("./HcP")
     HcP = [] 
@@ -2537,7 +2541,10 @@ if args.type == "nn_feature_predict_AZP":
         #### Test for each echo ####
         
         print >> sys.stderr, "Begin test" 
-        predict_result = [[]]*hop_num
+
+        predict_result = []
+        for hopi in range(hop_num):
+            predict_result.append([])
         numOfZP = 0
         hits = [0]*hop_num 
 
